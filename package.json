@@ -12,10 +12,23 @@
     "lint": "biome lint ."
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.15",
-    "js13k-vite-plugins": "1.0.3",
-    "terser": "5.48.0",
-    "typescript": "6.0.3",
-    "vite": "8.0.14"
+    "@biomejs/biome": "2.5.8",
+    "js13k-vite-plugins": "1.0.4",
+    "terser": "5.49.2",
+    "typescript": "7.0.2",
+    "vite": "8.2.1"
+  },
+  "allowScripts": {
+    "advzip-bin@2.0.0": true,
+    "cwebp-bin@6.1.2": true,
+    "ect-bin@1.4.1": true,
+    "gifsicle@5.2.0": true,
+    "jpegtran-bin@5.0.2": true,
+    "jpegtran-bin@6.0.1": true,
+    "mozjpeg@7.1.1": true,
+    "optipng-bin@7.0.1": true,
+    "pngquant-bin@6.0.1": true,
+    "esbuild@0.14.54": true,
+    "fsevents@2.3.3": true
   }
 }
