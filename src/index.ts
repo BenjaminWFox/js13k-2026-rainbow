@@ -49,7 +49,7 @@ function resize(): void {
 const playerFrames: HTMLCanvasElement[][] = [];
 
 async function main(): Promise<void> {
-  await loadSpriteSheet('sprites-squared.png');
+  await loadSpriteSheet('sprites.png');
 
   // 16x16 frames: left at y=0, down at y=16; up/right are flips
   for (const direction of [DIR_DOWN, DIR_UP, DIR_LEFT, DIR_RIGHT]) {
