@@ -199,14 +199,14 @@ For the wave effect (color returning outward from a destroyed pipe), the working
 
 ## 4. Sprites
 
-### Sheet: `public/sprites.png` (799×384, ~0.9 KB)
+### Sheet: `public/sprites-unicorn.png` (48×31)
 
-Authored in full color. Current contents:
+Packed player frames (transparency collapsed). Other world art remains on `sprites.png` for now.
 
 | Region | Coordinates | Description |
 |--------|-------------|-------------|
-| Player up/down | (0,0)–(59,19) | 3 frames, 20×20 each. Authored facing **down** (top-down view); flip **vertically** for up. |
-| Player left/right | (0,20)–(59,39) | 3 frames, 20×20 each. Authored facing **left**; flip **horizontally** for right. |
+| Player up/down | `sprites-unicorn.png` (0,0), 9×17, 3 frames | Authored facing **down**; flip **vertically** for up. Packed (no empty padding). |
+| Player left/right | `sprites-unicorn.png` (0,17), 16×14, 3 frames | Authored facing **left**; flip **horizontally** for right. Packed. |
 | Pipe | ~(0,41)–(27,54) | Siphon pipe segments (exact frame boxes TBD). |
 | Bitmap font | right of pipe, ~y41–54 | `0123456789ABC…` glyphs (exact glyph size/coverage TBD). |
 | Palette legend | y57 (spaced), y59 (packed) | Reference strip of the 11 palette colors. Not drawn in-game. |

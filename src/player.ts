@@ -1,4 +1,12 @@
-import { MAP_HEIGHT, MAP_WIDTH, PLAYER_SPEED, TILE_SIZE, WALK_FRAME_DURATION } from './constants';
+import {
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  PLAYER_HEIGHT,
+  PLAYER_SPEED,
+  PLAYER_WIDTH,
+  TILE_SIZE,
+  WALK_FRAME_DURATION,
+} from './constants';
 import { isDown } from './input';
 import { isSolidAt } from './map';
 
@@ -8,7 +16,7 @@ export const DIR_LEFT = 2;
 export const DIR_RIGHT = 3;
 
 export const player = {
-  // Top-left corner of the 20x20 sprite, world-space pixels
+  // Top-left corner of the player sprite, world-space pixels
   x: (MAP_WIDTH / 2) * TILE_SIZE,
   y: (MAP_HEIGHT / 2) * TILE_SIZE,
   facing: DIR_DOWN,
@@ -16,11 +24,11 @@ export const player = {
   walkTime: 0,
 };
 
-// Collision box within the 20x20 sprite, biased toward the feet (Zelda-style)
-const BOX_LEFT = 3;
-const BOX_RIGHT = 17;
-const BOX_TOP = 8;
-const BOX_BOTTOM = 20;
+// Collision box within the player sprite, biased toward the feet (Zelda-style)
+const BOX_LEFT = 6;
+const BOX_RIGHT = PLAYER_WIDTH - 6;
+const BOX_TOP = 16;
+const BOX_BOTTOM = PLAYER_HEIGHT;
 
 // Frame 0 is the standing pose; walking alternates between frames 1 and 2
 const WALK_SEQUENCE = [1, 2];
@@ -78,12 +86,21 @@ function moveWithCollision(dx: number, dy: number): void {
   }
 }
 
-// The box is smaller than a tile in both dimensions, so corner checks suffice
 function boxCollides(x: number, y: number): boolean {
-  return (
-    isSolidAt(x + BOX_LEFT, y + BOX_TOP) ||
-    isSolidAt(x + BOX_RIGHT - 1, y + BOX_TOP) ||
-    isSolidAt(x + BOX_LEFT, y + BOX_BOTTOM - 1) ||
-    isSolidAt(x + BOX_RIGHT - 1, y + BOX_BOTTOM - 1)
-  );
+  const left = x + BOX_LEFT;
+  const right = x + BOX_RIGHT - 1;
+  const top = y + BOX_TOP;
+  const bottom = y + BOX_BOTTOM - 1;
+  const tileX0 = Math.floor(left / TILE_SIZE);
+  const tileY0 = Math.floor(top / TILE_SIZE);
+  const tileX1 = Math.floor(right / TILE_SIZE);
+  const tileY1 = Math.floor(bottom / TILE_SIZE);
+  for (let ty = tileY0; ty <= tileY1; ty++) {
+    for (let tx = tileX0; tx <= tileX1; tx++) {
+      if (isSolidAt(tx * TILE_SIZE, ty * TILE_SIZE)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }

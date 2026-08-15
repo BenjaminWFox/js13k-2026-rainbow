@@ -1,4 +1,16 @@
-import { MAP_HEIGHT, MAP_WIDTH, TARGET_VIEW_HEIGHT, TILE_SIZE } from './constants';
+import {
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  PLAYER_DOWN_HEIGHT,
+  PLAYER_DOWN_WIDTH,
+  PLAYER_HEIGHT,
+  PLAYER_PIXEL_SCALE,
+  PLAYER_SIDE_HEIGHT,
+  PLAYER_SIDE_WIDTH,
+  PLAYER_WIDTH,
+  TARGET_VIEW_HEIGHT,
+  TILE_SIZE,
+} from './constants';
 import { clearPressedKeys, initInput, wasPressed } from './input';
 import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
 import { unlockedColors } from './palette';
@@ -31,21 +43,26 @@ function resize(): void {
   canvas.height = viewHeight;
   canvas.style.width = viewWidth * scale + 'px';
   canvas.style.height = viewHeight * scale + 'px';
+  // Resizing the canvas resets this; keep nearest-neighbor so scaled sprites stay crisp
+  ctx.imageSmoothingEnabled = false;
 }
 
 // playerFrames[direction][frameIndex]
 const playerFrames: HTMLCanvasElement[][] = [];
 
 async function main(): Promise<void> {
-  await loadSpriteSheet('sprites.png');
+  await loadSpriteSheet('sprites-unicorn.png');
 
-  // Sheet has down (row 0) and left (row 1) frames; up and right are flips
+  // Packed sheet: down 9x17 at (0,0), left 16x14 at (0,17); up/right are flips
   for (const direction of [DIR_DOWN, DIR_UP, DIR_LEFT, DIR_RIGHT]) {
-    const sourceY = direction === DIR_DOWN || direction === DIR_UP ? 0 : TILE_SIZE;
+    const vertical = direction === DIR_DOWN || direction === DIR_UP;
+    const sourceY = vertical ? 0 : PLAYER_DOWN_HEIGHT;
+    const width = vertical ? PLAYER_DOWN_WIDTH : PLAYER_SIDE_WIDTH;
+    const height = vertical ? PLAYER_DOWN_HEIGHT : PLAYER_SIDE_HEIGHT;
     const flipH = direction === DIR_RIGHT;
     const flipV = direction === DIR_UP;
     playerFrames[direction] = [0, 1, 2].map((frame) =>
-      createSprite(frame * TILE_SIZE, sourceY, TILE_SIZE, TILE_SIZE, flipH, flipV)
+      createSprite(frame * width, sourceY, width, height, flipH, flipV, PLAYER_PIXEL_SCALE)
     );
   }
 
@@ -88,12 +105,12 @@ function render(): void {
   // perfectly stable while the camera follows (no 1px jitter from double
   // rounding), regardless of view size parity.
   const cameraX = clamp(
-    player.x + TILE_SIZE / 2 - viewWidth / 2,
+    player.x + PLAYER_WIDTH / 2 - viewWidth / 2,
     0,
     MAP_WIDTH * TILE_SIZE - viewWidth
   );
   const cameraY = clamp(
-    player.y + TILE_SIZE / 2 - viewHeight / 2,
+    player.y + PLAYER_HEIGHT / 2 - viewHeight / 2,
     0,
     MAP_HEIGHT * TILE_SIZE - viewHeight
   );
@@ -114,7 +131,11 @@ function render(): void {
   }
 
   const frame = playerFrames[player.facing][currentPlayerFrame()];
-  ctx.drawImage(frame, Math.floor(player.x - cameraX), Math.floor(player.y - cameraY));
+  ctx.drawImage(
+    frame,
+    Math.floor(player.x + (PLAYER_WIDTH - frame.width) / 2 - cameraX),
+    Math.floor(player.y + (PLAYER_HEIGHT - frame.height) - cameraY)
+  );
 
   // DEBUG overlay
   ctx.fillStyle = '#fff';

@@ -8,6 +8,7 @@ interface BakedSprite {
   height: number;
   flipH: boolean;
   flipV: boolean;
+  pixelScale: number;
 }
 
 let sheet: ImageData;
@@ -37,20 +38,32 @@ export function createSprite(
   width: number,
   height: number,
   flipH = false,
-  flipV = false
+  flipV = false,
+  pixelScale = 1
 ): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const sprite: BakedSprite = { canvas, sourceX, sourceY, width, height, flipH, flipV };
+  canvas.width = width * pixelScale;
+  canvas.height = height * pixelScale;
+  const sprite: BakedSprite = {
+    canvas,
+    sourceX,
+    sourceY,
+    width,
+    height,
+    flipH,
+    flipV,
+    pixelScale,
+  };
   bake(sprite);
   bakedSprites.push(sprite);
   return canvas;
 }
 
 function bake(sprite: BakedSprite): void {
-  const { sourceX, sourceY, width, height, flipH, flipV } = sprite;
-  const output = new ImageData(width, height);
+  const { sourceX, sourceY, width, height, flipH, flipV, pixelScale } = sprite;
+  const outWidth = width * pixelScale;
+  const outHeight = height * pixelScale;
+  const output = new ImageData(outWidth, outHeight);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const srcX = sourceX + (flipH ? width - 1 - x : x);
@@ -63,11 +76,18 @@ function bake(sprite: BakedSprite): void {
       const rgb =
         (sheet.data[srcIndex] << 16) | (sheet.data[srcIndex + 1] << 8) | sheet.data[srcIndex + 2];
       const mapped = currentColor(rgb);
-      const outIndex = (y * width + x) * 4;
-      output.data[outIndex] = (mapped >> 16) & 255;
-      output.data[outIndex + 1] = (mapped >> 8) & 255;
-      output.data[outIndex + 2] = mapped & 255;
-      output.data[outIndex + 3] = alpha;
+      const r = (mapped >> 16) & 255;
+      const g = (mapped >> 8) & 255;
+      const b = mapped & 255;
+      for (let py = 0; py < pixelScale; py++) {
+        for (let px = 0; px < pixelScale; px++) {
+          const outIndex = ((y * pixelScale + py) * outWidth + (x * pixelScale + px)) * 4;
+          output.data[outIndex] = r;
+          output.data[outIndex + 1] = g;
+          output.data[outIndex + 2] = b;
+          output.data[outIndex + 3] = alpha;
+        }
+      }
     }
   }
   const ctx = sprite.canvas.getContext('2d') as CanvasRenderingContext2D;
