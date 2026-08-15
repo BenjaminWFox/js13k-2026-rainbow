@@ -22,8 +22,12 @@ RAINBOW_COLORS.forEach((color, index) => {
 });
 // Packed unicorn sheet quantized a few channels by 1; treat as the same family
 colorFamily.set(0xff8300, ORANGE);
+colorFamily.set(0xff8100, ORANGE);
+colorFamily.set(0xff8000, ORANGE);
 colorFamily.set(0xf1e600, YELLOW);
+colorFamily.set(0xf1e400, YELLOW);
 colorFamily.set(0x6f00ef, INDIGO);
+colorFamily.set(0x6d00ef, INDIGO);
 
 /**
  * Desaturate a color to its locked grey using HSL lightness.

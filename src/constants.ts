@@ -4,16 +4,13 @@ export const TARGET_VIEW_HEIGHT = 250;
 
 export const TILE_SIZE = 20;
 
-// Native unicorn frame sizes in the packed sheet (sprites-unicorn.png)
-export const PLAYER_DOWN_WIDTH = 9;
-export const PLAYER_DOWN_HEIGHT = 17;
-export const PLAYER_SIDE_WIDTH = 16;
-export const PLAYER_SIDE_HEIGHT = 14;
+// Native unicorn frame size in sprites-squared.png (all directions are 16x16)
+export const PLAYER_SIZE = 16;
+export const PLAYER_HIT = 12;
 export const PLAYER_PIXEL_SCALE = 2;
 
-// Logical size: widest/tallest baked frame, used for camera and collision
-export const PLAYER_WIDTH = PLAYER_SIDE_WIDTH * PLAYER_PIXEL_SCALE;
-export const PLAYER_HEIGHT = PLAYER_DOWN_HEIGHT * PLAYER_PIXEL_SCALE;
+export const PLAYER_WIDTH = PLAYER_SIZE * PLAYER_PIXEL_SCALE;
+export const PLAYER_HEIGHT = PLAYER_WIDTH;
 export const MAP_WIDTH = 100;
 export const MAP_HEIGHT = 100;
 

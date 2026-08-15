@@ -1,9 +1,10 @@
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
-  PLAYER_HEIGHT,
+  PLAYER_HIT,
+  PLAYER_PIXEL_SCALE,
+  PLAYER_SIZE,
   PLAYER_SPEED,
-  PLAYER_WIDTH,
   TILE_SIZE,
   WALK_FRAME_DURATION,
 } from './constants';
@@ -23,12 +24,6 @@ export const player = {
   moving: false,
   walkTime: 0,
 };
-
-// Collision box within the player sprite, biased toward the feet (Zelda-style)
-const BOX_LEFT = 6;
-const BOX_RIGHT = PLAYER_WIDTH - 6;
-const BOX_TOP = 16;
-const BOX_BOTTOM = PLAYER_HEIGHT;
 
 // Frame 0 is the standing pose; walking alternates between frames 1 and 2
 const WALK_SEQUENCE = [1, 2];
@@ -74,33 +69,103 @@ export function currentPlayerFrame(): number {
   return WALK_SEQUENCE[step % WALK_SEQUENCE.length];
 }
 
-// Axis-separated movement so the player slides along walls
+const OVERLAP_EPS = 1e-6;
+
+// Axis-separated movement: slide along walls, snap flush to the tile edge
 function moveWithCollision(dx: number, dy: number): void {
-  const newX = player.x + dx;
-  if (!boxCollides(newX, player.y)) {
-    player.x = newX;
+  moveAxis(dx, 0);
+  moveAxis(0, dy);
+}
+
+function moveAxis(dx: number, dy: number): void {
+  if (dx === 0 && dy === 0) {
+    return;
   }
+  const newX = player.x + dx;
   const newY = player.y + dy;
-  if (!boxCollides(player.x, newY)) {
+  if (!boxCollides(newX, newY)) {
+    player.x = newX;
     player.y = newY;
+    return;
+  }
+
+  const hit = getPlayerHitbox(newX, newY);
+  if (dx > 0) {
+    player.x = newX + (minOverlappingTileEdge(hit, 'left') - (hit.x + hit.w));
+  } else if (dx < 0) {
+    player.x = newX + (maxOverlappingTileEdge(hit, 'right') - hit.x);
+  } else if (dy > 0) {
+    player.y = newY + (minOverlappingTileEdge(hit, 'top') - (hit.y + hit.h));
+  } else {
+    player.y = newY + (maxOverlappingTileEdge(hit, 'bottom') - hit.y);
   }
 }
 
 function boxCollides(x: number, y: number): boolean {
-  const left = x + BOX_LEFT;
-  const right = x + BOX_RIGHT - 1;
-  const top = y + BOX_TOP;
-  const bottom = y + BOX_BOTTOM - 1;
-  const tileX0 = Math.floor(left / TILE_SIZE);
-  const tileY0 = Math.floor(top / TILE_SIZE);
-  const tileX1 = Math.floor(right / TILE_SIZE);
-  const tileY1 = Math.floor(bottom / TILE_SIZE);
-  for (let ty = tileY0; ty <= tileY1; ty++) {
-    for (let tx = tileX0; tx <= tileX1; tx++) {
+  return forEachOverlappingSolid(getPlayerHitbox(x, y), () => true);
+}
+
+function forEachOverlappingSolid(
+  hit: { x: number; y: number; w: number; h: number },
+  visit: (tx: number, ty: number) => boolean | undefined
+): boolean {
+  const x0 = Math.floor(hit.x / TILE_SIZE);
+  const y0 = Math.floor(hit.y / TILE_SIZE);
+  const x1 = Math.floor((hit.x + hit.w - OVERLAP_EPS) / TILE_SIZE);
+  const y1 = Math.floor((hit.y + hit.h - OVERLAP_EPS) / TILE_SIZE);
+  let found = false;
+  for (let ty = y0; ty <= y1; ty++) {
+    for (let tx = x0; tx <= x1; tx++) {
       if (isSolidAt(tx * TILE_SIZE, ty * TILE_SIZE)) {
-        return true;
+        found = true;
+        if (visit(tx, ty)) {
+          return true;
+        }
       }
     }
   }
-  return false;
+  return found;
+}
+
+function minOverlappingTileEdge(
+  hit: { x: number; y: number; w: number; h: number },
+  edge: 'left' | 'top'
+): number {
+  let best = Infinity;
+  forEachOverlappingSolid(hit, (tx, ty) => {
+    const value = edge === 'left' ? tx * TILE_SIZE : ty * TILE_SIZE;
+    if (value < best) {
+      best = value;
+    }
+  });
+  return best;
+}
+
+function maxOverlappingTileEdge(
+  hit: { x: number; y: number; w: number; h: number },
+  edge: 'right' | 'bottom'
+): number {
+  let best = -Infinity;
+  forEachOverlappingSolid(hit, (tx, ty) => {
+    const value = edge === 'right' ? (tx + 1) * TILE_SIZE : (ty + 1) * TILE_SIZE;
+    if (value > best) {
+      best = value;
+    }
+  });
+  return best;
+}
+
+/** World-space hitbox: centered 12x12 on the 16x16 sprite, then pixel-scaled. */
+export function getPlayerHitbox(
+  x = player.x,
+  y = player.y
+): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+} {
+  const inset = ((PLAYER_SIZE - PLAYER_HIT) / 2) * PLAYER_PIXEL_SCALE;
+  const size = PLAYER_HIT * PLAYER_PIXEL_SCALE;
+  return { x: x + inset, y: y + inset, w: size, h: size };
 }

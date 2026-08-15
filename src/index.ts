@@ -1,18 +1,15 @@
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
-  PLAYER_DOWN_HEIGHT,
-  PLAYER_DOWN_WIDTH,
   PLAYER_HEIGHT,
   PLAYER_PIXEL_SCALE,
-  PLAYER_SIDE_HEIGHT,
-  PLAYER_SIDE_WIDTH,
+  PLAYER_SIZE,
   PLAYER_WIDTH,
   TARGET_VIEW_HEIGHT,
   TILE_SIZE,
 } from './constants';
 import { clearPressedKeys, initInput, wasPressed } from './input';
-import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
+import { bakeTiles, generateMap, getTile, TILE_TREE, tileCanvases } from './map';
 import { unlockedColors } from './palette';
 import {
   currentPlayerFrame,
@@ -20,6 +17,7 @@ import {
   DIR_LEFT,
   DIR_RIGHT,
   DIR_UP,
+  getPlayerHitbox,
   player,
   updatePlayer,
 } from './player';
@@ -51,18 +49,23 @@ function resize(): void {
 const playerFrames: HTMLCanvasElement[][] = [];
 
 async function main(): Promise<void> {
-  await loadSpriteSheet('sprites-unicorn.png');
+  await loadSpriteSheet('sprites-squared.png');
 
-  // Packed sheet: down 9x17 at (0,0), left 16x14 at (0,17); up/right are flips
+  // 16x16 frames: left at y=0, down at y=16; up/right are flips
   for (const direction of [DIR_DOWN, DIR_UP, DIR_LEFT, DIR_RIGHT]) {
-    const vertical = direction === DIR_DOWN || direction === DIR_UP;
-    const sourceY = vertical ? 0 : PLAYER_DOWN_HEIGHT;
-    const width = vertical ? PLAYER_DOWN_WIDTH : PLAYER_SIDE_WIDTH;
-    const height = vertical ? PLAYER_DOWN_HEIGHT : PLAYER_SIDE_HEIGHT;
+    const sourceY = direction === DIR_DOWN || direction === DIR_UP ? PLAYER_SIZE : 0;
     const flipH = direction === DIR_RIGHT;
     const flipV = direction === DIR_UP;
     playerFrames[direction] = [0, 1, 2].map((frame) =>
-      createSprite(frame * width, sourceY, width, height, flipH, flipV, PLAYER_PIXEL_SCALE)
+      createSprite(
+        frame * PLAYER_SIZE,
+        sourceY,
+        PLAYER_SIZE,
+        PLAYER_SIZE,
+        flipH,
+        flipV,
+        PLAYER_PIXEL_SCALE
+      )
     );
   }
 
@@ -87,8 +90,9 @@ function gameLoop(time: number): void {
   clearPressedKeys();
 }
 
-// DEBUG ONLY: keys 1-7 toggle rainbow colors to exercise the bake pipeline.
-// Real unlocks will come from destroying pipes.
+let showHitboxes = false;
+
+// DEBUG ONLY: keys 1-7 toggle rainbow colors; 8 toggles hitbox outlines.
 function handleDebugKeys(): void {
   for (let i = 0; i < 7; i++) {
     if (wasPressed('Digit' + (i + 1))) {
@@ -96,6 +100,9 @@ function handleDebugKeys(): void {
       rebakeAllSprites();
       bakeTiles();
     }
+  }
+  if (wasPressed('Digit8')) {
+    showHitboxes = !showHitboxes;
   }
 }
 
@@ -131,16 +138,38 @@ function render(): void {
   }
 
   const frame = playerFrames[player.facing][currentPlayerFrame()];
-  ctx.drawImage(
-    frame,
-    Math.floor(player.x + (PLAYER_WIDTH - frame.width) / 2 - cameraX),
-    Math.floor(player.y + (PLAYER_HEIGHT - frame.height) - cameraY)
-  );
+  ctx.drawImage(frame, Math.floor(player.x - cameraX), Math.floor(player.y - cameraY));
+
+  if (showHitboxes) {
+    for (let ty = firstTileY; ty <= lastTileY; ty++) {
+      for (let tx = firstTileX; tx <= lastTileX; tx++) {
+        if (getTile(tx, ty) === TILE_TREE) {
+          debugRect(
+            Math.floor(tx * TILE_SIZE - cameraX),
+            Math.floor(ty * TILE_SIZE - cameraY),
+            TILE_SIZE,
+            TILE_SIZE,
+            '#ff0'
+          );
+        }
+      }
+    }
+    const hit = getPlayerHitbox();
+    debugRect(Math.floor(hit.x - cameraX), Math.floor(hit.y - cameraY), hit.w, hit.h, '#f00');
+  }
 
   // DEBUG overlay
   ctx.fillStyle = '#fff';
   ctx.font = '5px monospace';
-  ctx.fillText('arrows: move / 1-7: toggle colors (debug)', 3, viewHeight - 3);
+  ctx.fillText('arrows: move / 1-7: colors / 8: hitboxes', 3, viewHeight - 3);
+}
+
+function debugRect(x: number, y: number, w: number, h: number, color: string): void {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, 1);
+  ctx.fillRect(x, y + h - 1, w, 1);
+  ctx.fillRect(x, y, 1, h);
+  ctx.fillRect(x + w - 1, y, 1, h);
 }
 
 function clamp(value: number, min: number, max: number): number {

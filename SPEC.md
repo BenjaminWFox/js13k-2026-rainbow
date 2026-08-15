@@ -79,6 +79,8 @@ from the pipe**, recoloring the world as it passes.
   - Maximum mana **grows with each pipe destroyed**.
   - Exact max-mana curve, regen rate, and per-ability costs: **TBD** (tune during development).
 - **Base attack:** headbutt (melee, always available, costs no mana).
+- **Hitboxes:** one centered 12×12 box on the 16×16 sprite, used for every facing
+  (then × `PLAYER_PIXEL_SCALE`). Movement collision does not change with direction.
 
 ### Powers (one per released color)
 
@@ -199,14 +201,14 @@ For the wave effect (color returning outward from a destroyed pipe), the working
 
 ## 4. Sprites
 
-### Sheet: `public/sprites-unicorn.png` (48×31)
+### Sheet: `public/sprites-squared.png`
 
-Packed player frames (transparency collapsed). Other world art remains on `sprites.png` for now.
+All player frames are 16×16. Other world art remains on `sprites.png` for now.
 
 | Region | Coordinates | Description |
 |--------|-------------|-------------|
-| Player up/down | `sprites-unicorn.png` (0,0), 9×17, 3 frames | Authored facing **down**; flip **vertically** for up. Packed (no empty padding). |
-| Player left/right | `sprites-unicorn.png` (0,17), 16×14, 3 frames | Authored facing **left**; flip **horizontally** for right. Packed. |
+| Player left/right | `sprites-squared.png` (0,0), 16×16, 3 frames | Authored facing **left**; flip **horizontally** for right. |
+| Player up/down | `sprites-squared.png` (0,16), 16×16, 3 frames | Authored facing **down**; flip **vertically** for up. |
 | Pipe | ~(0,41)–(27,54) | Siphon pipe segments (exact frame boxes TBD). |
 | Bitmap font | right of pipe, ~y41–54 | `0123456789ABC…` glyphs (exact glyph size/coverage TBD). |
 | Palette legend | y57 (spaced), y59 (packed) | Reference strip of the 11 palette colors. Not drawn in-game. |
