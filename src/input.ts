@@ -1,24 +1,31 @@
-export interface Input {
-  down: boolean;
-  downCount: number;
-  upCount: number;
+const downKeys = new Set<string>();
+const pressedKeys = new Set<string>();
+
+export function initInput(): void {
+  window.addEventListener('keydown', (event) => {
+    if (!event.repeat) {
+      pressedKeys.add(event.code);
+    }
+    downKeys.add(event.code);
+    if (event.code.startsWith('Arrow')) {
+      event.preventDefault();
+    }
+  });
+  window.addEventListener('keyup', (event) => {
+    downKeys.delete(event.code);
+  });
 }
 
-/**
- * Creates a new input.
- */
-export const newInput = (): Input => ({ down: false, downCount: 0, upCount: 2 });
+export function isDown(code: string): boolean {
+  return downKeys.has(code);
+}
 
-/**
- * Updates the up/down counts for an input.
- * @param input
- */
-export function updateInput(input: Input): void {
-  if (input.down) {
-    input.downCount++;
-    input.upCount = 0;
-  } else {
-    input.downCount = 0;
-    input.upCount++;
-  }
+/** True only on the first frame after the key went down. */
+export function wasPressed(code: string): boolean {
+  return pressedKeys.has(code);
+}
+
+/** Call once at the end of every frame. */
+export function clearPressedKeys(): void {
+  pressedKeys.clear();
 }

@@ -103,7 +103,7 @@ export function zzfxG(
   delay = 0,
   sustainVolume = 1,
   decay = 0,
-  tremolo = 0,
+  tremolo = 0
 ): number[] {
   // init parameters
   const PI2 = Math.PI * 2;
@@ -112,7 +112,8 @@ export function zzfxG(
   const startSlide = (slide *= (500 * PI2) / sampleRate / sampleRate);
   const b = [];
 
-  let startFrequency = (frequency *= ((1 + randomness * 2 * Math.random() - randomness) * PI2) / sampleRate);
+  let startFrequency = (frequency *=
+    ((1 + randomness * 2 * Math.random() - randomness) * PI2) / sampleRate);
   let t = 0;
   let tm = 0;
   let i = 0;

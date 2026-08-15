@@ -1,255 +1,129 @@
+import { MAP_HEIGHT, MAP_WIDTH, TARGET_VIEW_HEIGHT, TILE_SIZE } from './constants';
+import { clearPressedKeys, initInput, wasPressed } from './input';
+import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
+import { unlockedColors } from './palette';
 import {
-  FLOATY_GRAVITY,
-  GRAVITY,
-  HALF_TILE_SIZE,
-  HEIGHT,
-  PLAYER_ACCELERATION,
-  PLAYER_JUMP_POWER,
-  PLAYER_MAX_SPEED,
-  TILE_SIZE,
-  TILEMAP_HEIGHT,
-  TILEMAP_WIDTH,
-  WIDTH,
-} from './constants';
-import {
-  ENTITY_TYPE_COIN,
-  ENTITY_TYPE_JUMPPAD,
-  ENTITY_TYPE_PLAYER,
-  ENTITY_TYPE_WALKING_ENEMY,
-  entities,
-} from './entity';
-import { initKeys, KEY_A, KEY_D, KEY_LEFT, KEY_RIGHT, KEY_Z, keys, updateKeys } from './keys';
-import { initMouse, updateMouse } from './mouse';
-import { coinSound, hurtSound, jumpPadSound, jumpSound } from './sounds';
-import { collisionDetectionEntityToTile, getTile, initTileMap } from './tilemap';
-import { zzfx } from './zzfx';
+  currentPlayerFrame,
+  DIR_DOWN,
+  DIR_LEFT,
+  DIR_RIGHT,
+  DIR_UP,
+  player,
+  updatePlayer,
+} from './player';
+import { createSprite, loadSpriteSheet, rebakeAllSprites } from './sprites';
 
 const canvas = document.querySelector('#c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 
-const skyGradient = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-skyGradient.addColorStop(0, '#dff6f5');
-skyGradient.addColorStop(1, '#a4c6f1');
+// The visible slice of the world, in world pixels; recomputed on resize
+let viewWidth = 1;
+let viewHeight = 1;
 
-const image = new Image();
-image.src = 'i.png';
+// Fill the whole viewport: pick the integer pixel scale that gets the view
+// height closest to TARGET_VIEW_HEIGHT, then size the canvas to cover the
+// window at that scale (it may overhang by up to scale-1 px; overflow hidden).
+function resize(): void {
+  const scale = Math.max(1, Math.round(window.innerHeight / TARGET_VIEW_HEIGHT));
+  viewWidth = Math.ceil(window.innerWidth / scale);
+  viewHeight = Math.ceil(window.innerHeight / scale);
+  canvas.width = viewWidth;
+  canvas.height = viewHeight;
+  canvas.style.width = viewWidth * scale + 'px';
+  canvas.style.height = viewHeight * scale + 'px';
+}
 
-const player = initTileMap();
+// playerFrames[direction][frameIndex]
+const playerFrames: HTMLCanvasElement[][] = [];
 
-let windowTime = 0;
-let dt = 0;
-let gameTime = 0;
-let score = 0;
-let viewportX = 0;
+async function main(): Promise<void> {
+  await loadSpriteSheet('sprites.png');
 
-initKeys(canvas);
-initMouse(canvas);
+  // Sheet has down (row 0) and left (row 1) frames; up and right are flips
+  for (const direction of [DIR_DOWN, DIR_UP, DIR_LEFT, DIR_RIGHT]) {
+    const sourceY = direction === DIR_DOWN || direction === DIR_UP ? 0 : TILE_SIZE;
+    const flipH = direction === DIR_RIGHT;
+    const flipV = direction === DIR_UP;
+    playerFrames[direction] = [0, 1, 2].map((frame) =>
+      createSprite(frame * TILE_SIZE, sourceY, TILE_SIZE, TILE_SIZE, flipH, flipV)
+    );
+  }
 
-function gameLoop(newTime: number): void {
+  generateMap(1);
+  bakeTiles();
+  initInput();
+  window.addEventListener('resize', resize);
+  resize();
   requestAnimationFrame(gameLoop);
+}
 
-  if (player.health > 0) {
-    dt = Math.min(newTime - windowTime, 1000 / 30);
-    gameTime += dt;
+let lastTime = 0;
 
-    updateKeys();
-    updateMouse();
-    handleInput();
-    updateEntities();
-    collisionDetection();
-    updateCamera();
-  }
+function gameLoop(time: number): void {
+  requestAnimationFrame(gameLoop);
+  const dt = Math.min(time - lastTime, 1000 / 30);
+  lastTime = time;
 
+  handleDebugKeys();
+  updatePlayer(dt);
   render();
-  windowTime = newTime;
-  dt = 0;
+  clearPressedKeys();
 }
 
-function handleInput(): void {
-  if (keys[KEY_LEFT].down || keys[KEY_A].down) {
-    player.dx -= dt * PLAYER_ACCELERATION;
-    player.direction = -1;
-  } else if (keys[KEY_RIGHT].down || keys[KEY_D].down) {
-    player.dx += dt * PLAYER_ACCELERATION;
-    player.direction = 1;
-  } else {
-    player.dx = 0;
-  }
-
-  if (keys[KEY_Z].downCount === 1 && player.grounded) {
-    player.dy = -PLAYER_JUMP_POWER;
-    zzfx(...jumpSound);
-  }
-
-  if (player.dx > PLAYER_MAX_SPEED) {
-    player.dx = PLAYER_MAX_SPEED;
-  } else if (player.dx < -PLAYER_MAX_SPEED) {
-    player.dx = -PLAYER_MAX_SPEED;
-  }
-}
-
-function updateEntities(): void {
-  for (let i = entities.length - 1; i >= 0; i--) {
-    const entity = entities[i];
-
-    if (entity === player && keys[KEY_Z].down) {
-      player.dy += dt * FLOATY_GRAVITY;
-    } else if (entity.entityType !== ENTITY_TYPE_COIN) {
-      entity.dy += dt * GRAVITY;
+// DEBUG ONLY: keys 1-7 toggle rainbow colors to exercise the bake pipeline.
+// Real unlocks will come from destroying pipes.
+function handleDebugKeys(): void {
+  for (let i = 0; i < 7; i++) {
+    if (wasPressed('Digit' + (i + 1))) {
+      unlockedColors[i] = !unlockedColors[i];
+      rebakeAllSprites();
+      bakeTiles();
     }
-
-    if (entity.entityType === ENTITY_TYPE_WALKING_ENEMY) {
-      entity.dx = entity.direction * 0.03;
-    }
-
-    entity.x += dt * entity.dx;
-    entity.y += dt * entity.dy;
-    entity.cooldown--;
-
-    // Clear out dead entities
-    if (entity.health <= 0) {
-      entities.splice(i, 1);
-    }
-  }
-}
-
-function collisionDetection(): void {
-  collisionDetectionEntityToTile();
-  collisionDetectionEntityToEntity();
-}
-
-function collisionDetectionEntityToEntity(): void {
-  for (const entity of entities) {
-    for (const other of entities) {
-      if (entity !== other && entity.distance(other) < TILE_SIZE) {
-        if (entity === player && other.entityType === ENTITY_TYPE_COIN) {
-          score += 100;
-          other.health = 0;
-          zzfx(...coinSound);
-        }
-        if (entity === player && other.entityType === ENTITY_TYPE_JUMPPAD) {
-          player.y = Math.min(player.y, other.y - 8);
-          player.dx = 0;
-          player.dy = -PLAYER_JUMP_POWER * 2;
-          zzfx(...jumpPadSound);
-        }
-        if (entity === player && other.entityType === ENTITY_TYPE_WALKING_ENEMY) {
-          if (player.y + HALF_TILE_SIZE < other.y) {
-            // If the player is at least half a tile above the enemy, kill the enemy
-            other.health -= 100;
-            player.dy = -PLAYER_JUMP_POWER;
-            zzfx(...jumpSound);
-          } else {
-            // Otherwise hurt the player
-            player.health -= 10;
-            player.dy = -0.25 * PLAYER_JUMP_POWER;
-
-            // Push the player away from the enemy
-            if (player.x < other.x) {
-              player.x = other.x - TILE_SIZE - HALF_TILE_SIZE;
-            } else {
-              player.x = other.x + TILE_SIZE + HALF_TILE_SIZE;
-            }
-            zzfx(...hurtSound);
-          }
-        }
-      }
-    }
-  }
-}
-
-function updateCamera(): void {
-  if (player.x - viewportX > 300) {
-    viewportX = player.x - 300;
-  } else if (viewportX + WIDTH - player.x > 300) {
-    viewportX = player.x + 300 - WIDTH;
-  }
-
-  if (viewportX < 0) {
-    viewportX = 0;
-  }
-
-  if (viewportX + WIDTH > TILEMAP_WIDTH * TILE_SIZE) {
-    viewportX = TILEMAP_WIDTH * TILE_SIZE - WIDTH;
   }
 }
 
 function render(): void {
-  clearScreen();
-  drawTileMap();
-  drawEntities();
-  drawOverlay();
-}
+  // The camera stays fractional; every draw position is rounded exactly once
+  // via floor(worldX - cameraX). This keeps the player's screen position
+  // perfectly stable while the camera follows (no 1px jitter from double
+  // rounding), regardless of view size parity.
+  const cameraX = clamp(
+    player.x + TILE_SIZE / 2 - viewWidth / 2,
+    0,
+    MAP_WIDTH * TILE_SIZE - viewWidth
+  );
+  const cameraY = clamp(
+    player.y + TILE_SIZE / 2 - viewHeight / 2,
+    0,
+    MAP_HEIGHT * TILE_SIZE - viewHeight
+  );
 
-function clearScreen(): void {
-  ctx.fillStyle = skyGradient;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
-}
-
-function drawTileMap(): void {
-  for (let y = 0; y < TILEMAP_HEIGHT; y++) {
-    for (let x = 0; x < TILEMAP_WIDTH; x++) {
-      const tile = getTile(x, y);
-      if (tile > 0) {
-        const tx = (tile - 1) * TILE_SIZE;
-        const ty = 24;
-        ctx.drawImage(
-          image,
-          tx,
-          ty,
-          TILE_SIZE,
-          TILE_SIZE,
-          Math.floor(x * TILE_SIZE - viewportX),
-          y * TILE_SIZE,
-          TILE_SIZE,
-          TILE_SIZE,
-        );
-      }
+  // Tiles: draw only the visible range
+  const firstTileX = Math.floor(cameraX / TILE_SIZE);
+  const firstTileY = Math.floor(cameraY / TILE_SIZE);
+  const lastTileX = Math.floor((cameraX + viewWidth) / TILE_SIZE);
+  const lastTileY = Math.floor((cameraY + viewHeight) / TILE_SIZE);
+  for (let ty = firstTileY; ty <= lastTileY; ty++) {
+    for (let tx = firstTileX; tx <= lastTileX; tx++) {
+      ctx.drawImage(
+        tileCanvases[getTile(tx, ty)],
+        Math.floor(tx * TILE_SIZE - cameraX),
+        Math.floor(ty * TILE_SIZE - cameraY)
+      );
     }
   }
+
+  const frame = playerFrames[player.facing][currentPlayerFrame()];
+  ctx.drawImage(frame, Math.floor(player.x - cameraX), Math.floor(player.y - cameraY));
+
+  // DEBUG overlay
+  ctx.fillStyle = '#fff';
+  ctx.font = '5px monospace';
+  ctx.fillText('arrows: move / 1-7: toggle colors (debug)', 3, viewHeight - 3);
 }
 
-function drawEntities(): void {
-  for (const entity of entities) {
-    ctx.save();
-    ctx.translate(Math.floor(entity.x - viewportX + HALF_TILE_SIZE), Math.floor(entity.y + HALF_TILE_SIZE));
-    ctx.scale(entity.direction, 1);
-    let sx = 0;
-    if (entity.entityType === ENTITY_TYPE_PLAYER) {
-      const walking = Math.abs(entity.dx) > 0.01;
-      sx = !entity.grounded ? 48 : walking ? 16 + (entity.frame | 0) * TILE_SIZE : 0;
-    } else if (entity.entityType === ENTITY_TYPE_COIN) {
-      sx = 64 + (entity.frame | 0) * TILE_SIZE;
-    } else if (entity.entityType === ENTITY_TYPE_JUMPPAD) {
-      sx = 96;
-    } else if (entity.entityType === ENTITY_TYPE_WALKING_ENEMY) {
-      sx = 112 + (entity.frame | 0) * TILE_SIZE;
-    }
-    ctx.drawImage(image, sx, 8, TILE_SIZE, TILE_SIZE, -HALF_TILE_SIZE, -HALF_TILE_SIZE, TILE_SIZE, TILE_SIZE);
-    ctx.restore();
-    entity.frame += dt * 0.005;
-    if (entity.frame >= 2) {
-      entity.frame = 0;
-    }
-  }
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
-function drawOverlay(): void {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, WIDTH, 16);
-
-  drawString('HEALTH  ' + player.health, 4, 6);
-  drawString('SCORE   ' + score, 150, 6);
-  drawString('TIME    ' + ((gameTime / 1000) | 0), 300, 6);
-}
-
-function drawString(str: string, x: number, y: number): void {
-  for (let i = 0; i < str.length; i++) {
-    const charCode = str.charCodeAt(i);
-    const charIndex = charCode < 65 ? charCode - 48 : charCode - 55;
-    ctx.drawImage(image, charIndex * 6, 0, 6, 6, x, y, 6, 6);
-    x += 6;
-  }
-}
-
-requestAnimationFrame(gameLoop);
+main();

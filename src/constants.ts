@@ -1,14 +1,13 @@
-export const WIDTH = 480;
-export const HEIGHT = 256;
-export const CENTER_X = WIDTH / 2;
-export const CENTER_Y = HEIGHT / 2;
-export const PLAYER_ACCELERATION = 0.0015;
-export const PLAYER_DECCELERATION = 0.002;
-export const PLAYER_MAX_SPEED = 0.12;
-export const PLAYER_JUMP_POWER = 0.18;
-export const GRAVITY = 0.001;
-export const FLOATY_GRAVITY = 0.0004;
-export const TILEMAP_WIDTH = 128;
-export const TILEMAP_HEIGHT = 16;
-export const TILE_SIZE = 16;
-export const HALF_TILE_SIZE = TILE_SIZE / 2;
+// The canvas fills the whole viewport at an integer pixel scale chosen so the
+// visible world height is as close to this as possible.
+export const TARGET_VIEW_HEIGHT = 200;
+
+export const TILE_SIZE = 20;
+export const MAP_WIDTH = 100;
+export const MAP_HEIGHT = 100;
+
+// Pixels per millisecond
+export const PLAYER_SPEED = 0.11;
+
+// Milliseconds per walk animation frame
+export const WALK_FRAME_DURATION = 130;
