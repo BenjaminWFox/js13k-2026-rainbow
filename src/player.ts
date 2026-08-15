@@ -9,7 +9,7 @@ import {
   WALK_FRAME_DURATION,
 } from './constants';
 import { isDown } from './input';
-import { isSolidAt } from './map';
+import { getTileSolid } from './map';
 
 export const DIR_DOWN = 0;
 export const DIR_UP = 1;
@@ -107,7 +107,7 @@ function boxCollides(x: number, y: number): boolean {
 
 function forEachOverlappingSolid(
   hit: { x: number; y: number; w: number; h: number },
-  visit: (tx: number, ty: number) => boolean | undefined
+  visit: (solid: { x: number; y: number; w: number; h: number }) => boolean | undefined
 ): boolean {
   const x0 = Math.floor(hit.x / TILE_SIZE);
   const y0 = Math.floor(hit.y / TILE_SIZE);
@@ -116,9 +116,16 @@ function forEachOverlappingSolid(
   let found = false;
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
-      if (isSolidAt(tx * TILE_SIZE, ty * TILE_SIZE)) {
+      const solid = getTileSolid(tx, ty);
+      if (
+        solid &&
+        hit.x < solid.x + solid.w - OVERLAP_EPS &&
+        hit.x + hit.w > solid.x + OVERLAP_EPS &&
+        hit.y < solid.y + solid.h - OVERLAP_EPS &&
+        hit.y + hit.h > solid.y + OVERLAP_EPS
+      ) {
         found = true;
-        if (visit(tx, ty)) {
+        if (visit(solid)) {
           return true;
         }
       }
@@ -132,8 +139,8 @@ function minOverlappingTileEdge(
   edge: 'left' | 'top'
 ): number {
   let best = Infinity;
-  forEachOverlappingSolid(hit, (tx, ty) => {
-    const value = edge === 'left' ? tx * TILE_SIZE : ty * TILE_SIZE;
+  forEachOverlappingSolid(hit, (solid) => {
+    const value = edge === 'left' ? solid.x : solid.y;
     if (value < best) {
       best = value;
     }
@@ -146,8 +153,8 @@ function maxOverlappingTileEdge(
   edge: 'right' | 'bottom'
 ): number {
   let best = -Infinity;
-  forEachOverlappingSolid(hit, (tx, ty) => {
-    const value = edge === 'right' ? (tx + 1) * TILE_SIZE : (ty + 1) * TILE_SIZE;
+  forEachOverlappingSolid(hit, (solid) => {
+    const value = edge === 'right' ? solid.x + solid.w : solid.y + solid.h;
     if (value > best) {
       best = value;
     }

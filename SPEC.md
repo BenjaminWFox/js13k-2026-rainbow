@@ -184,9 +184,13 @@ For the wave effect (color returning outward from a destroyed pipe), the working
 
 ### World / tilemap
 
-- **Tile size: 20px** (player sprite = exactly 1 tile).
-- **World: 100×100 tiles (2000×2000px)** to start ≈ 4.2×7.4 screens ≈ 31 screenfuls of area.
-  Tunable; the authoring approach is not sensitive to dimensions.
+- **Tile size: 24px** — matches the player's world hitbox (`12 × PLAYER_PIXEL_SCALE`), so a
+  one-tile gap is exactly wide enough to walk through.
+  - 12×12 solid (large bush), centered in the cell
+  - 6×6 solid (small bush), centered in the cell
+  - Water and map-edge walls fill the full 24×24 cell
+- **World: 100×100 tiles (2400×2400px)** to start. Tunable; the authoring approach is not
+  sensitive to dimensions.
 - **Authoring: hybrid** — a hand-placed skeleton (pipes, checkpoints, biome regions,
   major walls) with seeded procedural decoration/fill.
   - *Fallback:* fully procedural from a seed with constraints guaranteeing 7 reachable pipes,

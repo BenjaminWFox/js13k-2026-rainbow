@@ -2,10 +2,13 @@ import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
 import { BLUE, cssColor, GREEN, rainbowShade } from './palette';
 
 export const TILE_GRASS = 0;
-export const TILE_TREE = 1;
+export const TILE_BUSH = 1;
 export const TILE_WATER = 2;
+export const TILE_BUSH_SMALL = 3;
+export const TILE_WALL = 4;
 
-const SOLID = [false, true, true];
+// Centered solid size in world pixels; 0 = walkable
+const TILE_HIT = [0, 12, TILE_SIZE, 6, TILE_SIZE];
 
 const tiles = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
 
@@ -28,14 +31,27 @@ function setTile(tx: number, ty: number, tile: number): void {
 
 export function getTile(tx: number, ty: number): number {
   if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) {
-    return TILE_TREE;
+    return TILE_WALL;
   }
   return tiles[ty * MAP_WIDTH + tx];
 }
 
-/** Is the tile under this world-space pixel position solid? */
-export function isSolidAt(px: number, py: number): boolean {
-  return SOLID[getTile(Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE))];
+/** Centered solid box for this tile, or null if walkable. */
+export function getTileSolid(
+  tx: number,
+  ty: number
+): { x: number; y: number; w: number; h: number } | null {
+  const size = TILE_HIT[getTile(tx, ty)];
+  if (!size) {
+    return null;
+  }
+  const inset = (TILE_SIZE - size) / 2;
+  return {
+    x: tx * TILE_SIZE + inset,
+    y: ty * TILE_SIZE + inset,
+    w: size,
+    h: size,
+  };
 }
 
 /**
@@ -46,15 +62,13 @@ export function generateMap(seed: number): void {
   const random = mulberry32(seed);
   tiles.fill(TILE_GRASS);
 
-  // Solid tree border around the world edge
   for (let i = 0; i < MAP_WIDTH; i++) {
-    setTile(i, 0, TILE_TREE);
-    setTile(i, MAP_HEIGHT - 1, TILE_TREE);
-    setTile(0, i, TILE_TREE);
-    setTile(MAP_WIDTH - 1, i, TILE_TREE);
+    setTile(i, 0, TILE_WALL);
+    setTile(i, MAP_HEIGHT - 1, TILE_WALL);
+    setTile(0, i, TILE_WALL);
+    setTile(MAP_WIDTH - 1, i, TILE_WALL);
   }
 
-  // Lakes: short random walks painting 2x2 blobs of water
   for (let lake = 0; lake < 8; lake++) {
     let x = Math.floor(random() * MAP_WIDTH);
     let y = Math.floor(random() * MAP_HEIGHT);
@@ -68,17 +82,16 @@ export function generateMap(seed: number): void {
     }
   }
 
-  // Scattered tree clusters
   for (let cluster = 0; cluster < 200; cluster++) {
     const x = Math.floor(random() * MAP_WIDTH);
     const y = Math.floor(random() * MAP_HEIGHT);
     const size = 1 + Math.floor(random() * 3);
+    const bush = random() < 0.55 ? TILE_BUSH : TILE_BUSH_SMALL;
     for (let i = 0; i < size; i++) {
-      setTile(x + Math.floor(random() * 3) - 1, y + Math.floor(random() * 3) - 1, TILE_TREE);
+      setTile(x + Math.floor(random() * 3) - 1, y + Math.floor(random() * 3) - 1, bush);
     }
   }
 
-  // Keep the spawn area clear
   const centerX = MAP_WIDTH / 2;
   const centerY = MAP_HEIGHT / 2;
   for (let y = -5; y <= 5; y++) {
@@ -90,12 +103,10 @@ export function generateMap(seed: number): void {
   }
 }
 
-// One pre-rendered canvas per tile type; repainted on palette changes.
 export const tileCanvases: HTMLCanvasElement[] = [];
 
-/** Paint (or repaint) every tile type with the current palette state. */
 export function bakeTiles(): void {
-  const painters = [paintGrass, paintTree, paintWater];
+  const painters = [paintGrass, paintBush12, paintWater, paintBush6, paintWall];
   painters.forEach((paint, tile) => {
     let canvas = tileCanvases[tile];
     if (!canvas) {
@@ -118,14 +129,30 @@ function paintGrass(ctx: CanvasRenderingContext2D): void {
   }
 }
 
-function paintTree(ctx: CanvasRenderingContext2D): void {
+function paintBushBlob(ctx: CanvasRenderingContext2D, size: number): void {
   paintGrass(ctx);
-  // Canopy: a chunky diamond blob with a lighter crown
+  const inset = (TILE_SIZE - size) / 2;
   ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.45));
-  ctx.fillRect(4, 2, 12, 16);
-  ctx.fillRect(2, 4, 16, 12);
+  ctx.fillRect(inset, inset + 1, size, size - 2);
+  ctx.fillRect(inset + 1, inset, size - 2, size);
   ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.6));
-  ctx.fillRect(6, 4, 8, 6);
+  const highlight = Math.max(2, size - 4);
+  ctx.fillRect(inset + 2, inset + 1, highlight, Math.max(2, size / 2 - 1));
+}
+
+function paintBush12(ctx: CanvasRenderingContext2D): void {
+  paintBushBlob(ctx, 12);
+}
+
+function paintBush6(ctx: CanvasRenderingContext2D): void {
+  paintBushBlob(ctx, 6);
+}
+
+function paintWall(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.4));
+  ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.55));
+  ctx.fillRect(4, 4, TILE_SIZE - 8, TILE_SIZE - 8);
 }
 
 function paintWater(ctx: CanvasRenderingContext2D): void {
@@ -134,6 +161,6 @@ function paintWater(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = cssColor(rainbowShade(BLUE, 1.35));
   const random = mulberry32(13);
   for (let i = 0; i < 4; i++) {
-    ctx.fillRect(Math.floor(random() * 14), Math.floor(random() * TILE_SIZE), 6, 1);
+    ctx.fillRect(Math.floor(random() * (TILE_SIZE - 6)), Math.floor(random() * TILE_SIZE), 6, 1);
   }
 }

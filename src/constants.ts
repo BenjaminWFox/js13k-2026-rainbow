@@ -2,7 +2,7 @@
 // visible world height is as close to this as possible.
 export const TARGET_VIEW_HEIGHT = 250;
 
-export const TILE_SIZE = 20;
+export const TILE_SIZE = 24;
 
 // Native unicorn frame size in sprites-squared.png (all directions are 16x16)
 export const PLAYER_SIZE = 16;

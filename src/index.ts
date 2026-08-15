@@ -9,7 +9,7 @@ import {
   TILE_SIZE,
 } from './constants';
 import { clearPressedKeys, initInput, wasPressed } from './input';
-import { bakeTiles, generateMap, getTile, TILE_TREE, tileCanvases } from './map';
+import { bakeTiles, generateMap, getTile, getTileSolid, tileCanvases } from './map';
 import { unlockedColors } from './palette';
 import {
   currentPlayerFrame,
@@ -143,12 +143,13 @@ function render(): void {
   if (showHitboxes) {
     for (let ty = firstTileY; ty <= lastTileY; ty++) {
       for (let tx = firstTileX; tx <= lastTileX; tx++) {
-        if (getTile(tx, ty) === TILE_TREE) {
+        const solid = getTileSolid(tx, ty);
+        if (solid) {
           debugRect(
-            Math.floor(tx * TILE_SIZE - cameraX),
-            Math.floor(ty * TILE_SIZE - cameraY),
-            TILE_SIZE,
-            TILE_SIZE,
+            Math.floor(solid.x - cameraX),
+            Math.floor(solid.y - cameraY),
+            solid.w,
+            solid.h,
             '#ff0'
           );
         }
