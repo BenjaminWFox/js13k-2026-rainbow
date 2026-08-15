@@ -172,13 +172,13 @@ For the wave effect (color returning outward from a destroyed pipe), the working
 
 - **The canvas fills the entire browser viewport** — no letterboxing or border.
 - The internal resolution is dynamic: an integer pixel scale is chosen as
-  `round(innerHeight / TARGET_VIEW_HEIGHT)` (currently **200**), then the canvas is sized to
+  `round(innerHeight / TARGET_VIEW_HEIGHT)` (currently **250**), then the canvas is sized to
   cover the window at that scale with `image-rendering: pixelated`. Pixels stay crisp at any
   window size; the visible world area varies slightly with window shape.
-- With the 20px player and a ~200px view height: player ≈ 1/10 of screen height,
-  visibility ≈ ±90px vertical from the player.
-- *Tunable:* `TARGET_VIEW_HEIGHT` is the single zoom knob. Play-tested at 270 (too small to
-  see the player) and 135 (too tight for ranged combat) before settling on 200.
+- Target visibility is **±125px** from the player (`TARGET_VIEW_HEIGHT / 2`). Horizontal
+  reach depends on window aspect ratio. Player art scale (`PLAYER_PIXEL_SCALE`) is
+  independent of this camera zoom.
+- *Tunable:* `TARGET_VIEW_HEIGHT` is the single camera zoom knob.
 
 ### World / tilemap
 

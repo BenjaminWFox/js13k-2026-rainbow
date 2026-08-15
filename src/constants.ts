@@ -1,6 +1,6 @@
 // The canvas fills the whole viewport at an integer pixel scale chosen so the
 // visible world height is as close to this as possible.
-export const TARGET_VIEW_HEIGHT = 200;
+export const TARGET_VIEW_HEIGHT = 250;
 
 export const TILE_SIZE = 20;
 
