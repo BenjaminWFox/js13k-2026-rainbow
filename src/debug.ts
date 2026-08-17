@@ -24,8 +24,8 @@ const ATLAS: { x: number; y: number; w: number; h: number }[] = [
   // Pipes from (33,9)
   { x: 33, y: 9, w: 5, h: 8 }, // cap
   { x: 38, y: 9, w: 9, h: 6 }, // straight
-  { x: 47, y: 9, w: 9, h: 9 }, // curved
-  { x: 56, y: 9, w: 10, h: 6 }, // diagonal
+  { x: 47, y: 9, w: 9, h: 9 }, // curve outer accent (SE)
+  { x: 56, y: 9, w: 9, h: 9 }, // curve inner accent (→ NW)
   // Flowers 7x10 from (68,9)
   ...[0, 1, 2, 3].map((i) => ({ x: 68 + i * 7, y: 9, w: 7, h: 10 })),
 ];

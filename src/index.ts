@@ -12,6 +12,7 @@ import {
 } from './constants';
 import { clearPressedKeys, initInput } from './input';
 import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
+import { generatePipes, pipePieces } from './pipes';
 import { player, updatePlayer } from './player';
 import { createSprite, loadSpriteSheet } from './sprites';
 
@@ -50,6 +51,7 @@ async function main(): Promise<void> {
 
   generateMap(1);
   bakeTiles();
+  generatePipes(1);
   initInput();
   if (import.meta.env.DEV) {
     debug = await import('./debug');
@@ -104,6 +106,10 @@ function render(): void {
         Math.floor(ty * TILE_SIZE - cameraY)
       );
     }
+  }
+
+  for (const piece of pipePieces) {
+    ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
   }
 
   ctx.drawImage(playerSprite, Math.floor(player.x - cameraX), Math.floor(player.y - cameraY));

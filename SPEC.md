@@ -142,8 +142,8 @@ render loop does nothing but `drawImage`:
 1. **Load** `sprites.png` once; draw it to an offscreen canvas and read it with
    `getImageData` to get raw pixels.
 2. **Bake:** for each sprite frame, write pixels into a dedicated offscreen canvas, applying
-   the current palette state. Optional flips are supported by the baker but **not used for
-   the player yet** (facing art TBD).
+   the current palette state. Optional flips and 90° CCW rotation (`rot90`) are supported
+   (used for pipe orientations; not used for the player yet — facing art TBD).
 3. **Render loop:** pure `drawImage(bakedCanvas, x, y)` calls. Zero per-pixel work per frame.
 4. **On color unlock:** re-bake affected sprites **once**, then resume pure `drawImage`.
 
@@ -198,10 +198,17 @@ For the wave effect (color returning outward from a destroyed pipe), the working
   - Water and map-edge walls fill the full 11×11 cell
 - **World: 100×100 tiles (1100×1100px)** to start. Tunable; the authoring approach is not
   sensitive to dimensions.
-- **Authoring: hybrid** — a hand-placed skeleton (pipes, checkpoints, biome regions,
-  major walls) with seeded procedural decoration/fill.
-  - *Fallback:* fully procedural from a seed with constraints guaranteeing 7 reachable pipes,
-    if the hybrid approach has issues.
+- **Pipes (procedural):** 7 runs start on the map border (even angular spacing) and walk
+  inward. Two snake to within **50px** of center; the other five stop **200–400px** from
+  their starting edge. Built from straight + curve + cap only (diagonal unused for now).
+  Caps seal inward ends (long black border against the pipe); edge origins extend
+  off-map (no cap). Dark accents stay continuous by flipping straights (and caps)
+  when an elbow's port has the highlight on the opposite side — H uses flipV
+  (accent top), V uses flipV+rot90 (accent left). Outer + inner elbows cover all
+  four corners at both accent modes.
+- **Authoring: hybrid** — pipes are seeded procedural for now; checkpoints / biome regions /
+  major walls remain hand-placed later, with seeded decoration/fill.
+  - *Fallback:* fully procedural world from a seed if the hybrid approach has issues.
 
 ### Game state
 
@@ -245,11 +252,14 @@ Pipes start at (33,9), packed with no gaps; then a **2px gap**; then flowers.
 
 | Sprite | Origin | Size | Hitbox |
 |--------|--------|------|--------|
-| Pipe cap | (33,9) | 5×8 | Opaque **metal** pixels only |
+| Pipe cap | (33,9) | 5×8 | Opaque metal; long black border (+spikes) against the pipe |
 | Pipe straight | (38,9) | 9×6 | Opaque metal pixels only |
-| Pipe curved | (47,9) | 9×9 | Opaque metal pixels only |
-| Pipe diagonal | (56,9) | 10×6 | Opaque metal pixels only |
-| Flower 0–3 | (68,9), (75,9), (82,9), (89,9) | 7×10 cells | Decoration; non-solid (or TBD) |
+| Pipe curve (outer accent) | (47,9) | 9×9 | SE ports; accent on outer south/east edges |
+| Pipe curve (inner accent) | (56,9) | 9×9 | SE ports; accent on inner edges (flip 180 → NW) |
+| Flower 0–3 | (68,9), (75,9), (82,9), (89,9) | 7×10 cells | Decsheets; non-solid (or TBD) |
+
+`createSprite` supports flipH/flipV and `rot90` (CCW). Vertical straights use `rot90=1`
+so the dark accent lands on the right. No diagonal pipe piece.
 
 #### Font
 

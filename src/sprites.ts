@@ -8,6 +8,8 @@ interface BakedSprite {
   height: number;
   flipH: boolean;
   flipV: boolean;
+  /** Quarter-turns counter-clockwise: 0–3 */
+  rot90: number;
   pixelScale: number;
 }
 
@@ -29,8 +31,11 @@ export async function loadSpriteSheet(url: string): Promise<void> {
 
 /**
  * Bake a region of the sheet into its own canvas, applying the current palette
- * state (locked rainbow colors render as grey) and optional flips.
+ * state (locked rainbow colors render as grey) and optional flips / rotation.
  * The returned canvas is stable: rebakes redraw into it in place.
+ *
+ * Transform order: flip in source space, then rotate 90° CCW `rot90` times.
+ * Odd rotations swap width/height.
  */
 export function createSprite(
   sourceX: number,
@@ -39,11 +44,15 @@ export function createSprite(
   height: number,
   flipH = false,
   flipV = false,
+  rot90 = 0,
   pixelScale = 1
 ): HTMLCanvasElement {
+  const rot = ((rot90 % 4) + 4) % 4;
+  const outW = (rot % 2 === 0 ? width : height) * pixelScale;
+  const outH = (rot % 2 === 0 ? height : width) * pixelScale;
   const canvas = document.createElement('canvas');
-  canvas.width = width * pixelScale;
-  canvas.height = height * pixelScale;
+  canvas.width = outW;
+  canvas.height = outH;
   const sprite: BakedSprite = {
     canvas,
     sourceX,
@@ -52,6 +61,7 @@ export function createSprite(
     height,
     flipH,
     flipV,
+    rot90: rot,
     pixelScale,
   };
   bake(sprite);
@@ -60,9 +70,15 @@ export function createSprite(
 }
 
 function bake(sprite: BakedSprite): void {
-  const { sourceX, sourceY, width, height, flipH, flipV, pixelScale } = sprite;
-  const outWidth = width * pixelScale;
-  const outHeight = height * pixelScale;
+  const { sourceX, sourceY, width, height, flipH, flipV, rot90, pixelScale } = sprite;
+  const swapped = rot90 % 2 === 1;
+  const outWidth = (swapped ? height : width) * pixelScale;
+  const outHeight = (swapped ? width : height) * pixelScale;
+  // Canvas size can change on rebake if rot were mutable; keep in sync
+  if (sprite.canvas.width !== outWidth || sprite.canvas.height !== outHeight) {
+    sprite.canvas.width = outWidth;
+    sprite.canvas.height = outHeight;
+  }
   const output = new ImageData(outWidth, outHeight);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -79,9 +95,24 @@ function bake(sprite: BakedSprite): void {
       const r = (mapped >> 16) & 255;
       const g = (mapped >> 8) & 255;
       const b = mapped & 255;
+
+      let dx = x;
+      let dy = y;
+      let dw = width;
+      let dh = height;
+      for (let i = 0; i < rot90; i++) {
+        const ndx = dy;
+        const ndy = dw - 1 - dx;
+        dx = ndx;
+        dy = ndy;
+        const tmp = dw;
+        dw = dh;
+        dh = tmp;
+      }
+
       for (let py = 0; py < pixelScale; py++) {
         for (let px = 0; px < pixelScale; px++) {
-          const outIndex = ((y * pixelScale + py) * outWidth + (x * pixelScale + px)) * 4;
+          const outIndex = ((dy * pixelScale + py) * outWidth + (dx * pixelScale + px)) * 4;
           output.data[outIndex] = r;
           output.data[outIndex + 1] = g;
           output.data[outIndex + 2] = b;
