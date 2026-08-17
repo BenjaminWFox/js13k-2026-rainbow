@@ -120,9 +120,9 @@ export function bakeTiles(): void {
 }
 
 function paintGrass(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.85));
-  ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.65));
+  ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.55));
   const random = mulberry32(7);
   for (let i = 0; i < 8; i++) {
     ctx.fillRect(Math.floor(random() * TILE_SIZE), Math.floor(random() * TILE_SIZE), 2, 1);
