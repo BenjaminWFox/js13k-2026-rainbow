@@ -7,7 +7,7 @@ export const INDIGO = 5;
 export const VIOLET = 6;
 
 export const RAINBOW_COLORS = [
-  0xe40404, 0xff8200, 0xf1e500, 0x08ba00, 0x0030e2, 0x6e00ef, 0xa656ff,
+  0xe40404, 0xff8200, 0xf1e300, 0x08ba00, 0x0030e2, 0x6e00ef, 0xa656ff,
 ];
 
 // Which of the 7 rainbow colors have been released back into the world.
@@ -20,10 +20,11 @@ const colorFamily = new Map<number, number>();
 RAINBOW_COLORS.forEach((color, index) => {
   colorFamily.set(color, index);
 });
-// Packed unicorn sheet quantized a few channels by 1; treat as the same family
+// Sheet exports sometimes quantize a channel by 1; treat as the same family
 colorFamily.set(0xff8300, ORANGE);
 colorFamily.set(0xff8100, ORANGE);
 colorFamily.set(0xff8000, ORANGE);
+colorFamily.set(0xf1e500, YELLOW);
 colorFamily.set(0xf1e600, YELLOW);
 colorFamily.set(0xf1e400, YELLOW);
 colorFamily.set(0x6f00ef, INDIGO);

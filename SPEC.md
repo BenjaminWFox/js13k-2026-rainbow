@@ -33,6 +33,8 @@ These rules govern how code is written for this project.
 7. **No external dependencies at runtime.** Everything is hand-rolled or vendored (ZzFX/ZzFXM
    already vendored in the sample).
 8. **TypeScript strictness stays on.** Types are free — they're erased at build time.
+9. **Dev tooling is isolated.** Debug keys/overlays live in `src/debug.ts` and are loaded
+   only behind `import.meta.env.DEV`, so they are not part of the production entry.
 
 ---
 
@@ -89,7 +91,7 @@ from the pipe**, recoloring the world as it passes.
 |--------|----------|------------------------------------------|
 | Red    | `e40404` | Fireball — ranged damage                  |
 | Orange | `ff8200` | Flame nova — melee area damage            |
-| Yellow | `f1e500` | Dash                                      |
+| Yellow | `f1e300` | Dash                                      |
 | Green  | `08ba00` | Heal                                      |
 | Blue   | `0030e2` | Frost nova — melee area freeze            |
 | Indigo | `6e00ef` | Frostball — ranged single-target freeze   |
@@ -97,11 +99,17 @@ from the pipe**, recoloring the world as it passes.
 
 ### Enemies
 
-- **Minibosses (7):** one per pipe. Each miniboss has:
+- **Minibosses (7):** one per pipe. All share the **Business Man** sprite (intentional
+  corporate facelessness). The only color on each is the **eyes**, tinted to the rainbow
+  color that miniboss guards/steals. Each also has:
   - a basic attack (melee or ranged), and
   - the **power associated with its color** (e.g. the red miniboss shoots fireballs).
-- **Regular enemies:** roster **TBD** — likely a small set of corporation drones/creatures
-  roaming the world.
+- **Final boss:** **Business Boss** sprite — visually almost identical to Business Man on
+  purpose; distinct stats/behavior.
+- **Regular enemies:** office-supply creatures from the sheet (binder clip, pencil, pen,
+  stapler, paperclip, calculator, USB stick, scissors). Hitboxes are **smaller than the
+  crop cell**, following opaque content (e.g. skinny pencil/pen, short stapler) rather than
+  the full 7×9 pad.
 
 ### Controls
 
@@ -204,17 +212,53 @@ For the wave effect (color returning outward from a destroyed pipe), the working
 
 ## 4. Sprites
 
-### Sheet: `public/sprites.png` (250×100)
+### Sheet: `public/sprites.png` (220×50)
 
-Current shipped player art:
+All game art is drawn **1:1** (no pixel doubling). No walk/facing animation frames yet.
 
-| Region | Coordinates | Description |
-|--------|-------------|-------------|
-| Player | (0,81), 11×19, single frame | Authored facing **down**. Drawn **1:1**, no facing flips (behavior TBD). |
+#### Characters (11×19), top-left
 
-Older layout notes (pipe / font / palette legend) from earlier sheet drafts are **outdated** —
-re-document those regions when they are re-added to this sheet. Placeholder tiles (grass,
-bushes, water, walls) are currently **code-painted**, not read from the sheet.
+| Sprite | Origin | Size | Notes |
+|--------|--------|------|-------|
+| Unicorn (player) | (0,0) | 11×19 | Facing art TBD; no flips for now. Hitbox 11×11 bottom-aligned. |
+| Business Man (miniboss) | (11,0) | 11×19 | Shared by all 7 minibosses; eyes recolored per guarded color. |
+| Business Boss (finale) | (22,0) | 11×19 | Near-identical to Business Man on purpose. |
+
+#### Common enemies (7×9 cells), from (33,0) left → right
+
+| # | Name | Origin |
+|---|------|--------|
+| 0 | Binder clip | (33,0) |
+| 1 | Pencil | (40,0) |
+| 2 | Pen | (47,0) |
+| 3 | Stapler | (54,0) |
+| 4 | Paperclip | (61,0) |
+| 5 | Calculator | (68,0) |
+| 6 | USB stick | (75,0) |
+| 7 | Scissors | (82,0) |
+
+Hitboxes: **content-sized** (not the full padded cell).
+
+#### Pipes + flowers (lower strip from y=9)
+
+Pipes start at (33,9), packed with no gaps; then a **2px gap**; then flowers.
+
+| Sprite | Origin | Size | Hitbox |
+|--------|--------|------|--------|
+| Pipe cap | (33,9) | 5×8 | Opaque **metal** pixels only |
+| Pipe straight | (38,9) | 9×6 | Opaque metal pixels only |
+| Pipe curved | (47,9) | 9×9 | Opaque metal pixels only |
+| Pipe diagonal | (56,9) | 10×6 | Opaque metal pixels only |
+| Flower 0–3 | (68,9), (75,9), (82,9), (89,9) | 7×10 cells | Decoration; non-solid (or TBD) |
+
+#### Font
+
+A bitmap font row exists near the bottom of the sheet — **ignore for now**; may be replaced.
+Do not wire gameplay UI to it yet.
+
+#### Not on the sheet yet
+
+Placeholder grass / bush / water / wall tiles remain **code-painted**.
 
 Dev-only / not shipped: `reference/sprites-grey.png`, `public/sprites-unicorn.png`,
 `public/sprites-squared.png` (superseded experiments).
@@ -233,7 +277,7 @@ the rainbow colors.
 |---------|----------|-------------|------|
 | Red     | `e40404` | `747474`    | **Collides with neutral mid-grey** — harmless in the color→grey direction. |
 | Orange  | `ff8200` | `7f7f7f`    | |
-| Yellow  | `f1e500` | `787878`    | Within 4 shades of red/indigo greys. |
+| Yellow  | `f1e300` | `787878`    | Near-aliases `f1e400`/`f1e500`/`f1e600` mapped in code. |
 | Green   | `08ba00` | `5d5d5d`    | |
 | Blue    | `0030e2` | `717171`    | |
 | Indigo  | `6e00ef` | `777777`    | |
@@ -259,8 +303,11 @@ the rainbow colors.
 
 - Player facing / walk animation behavior (art + code).
 - Mana curve: max per pipe destroyed, regen rate, per-ability costs.
-- Regular enemy roster and behaviors.
+- Regular enemy behaviors (HP, damage, movement patterns per office-supply type).
+- Exact per-enemy content hitbox rectangles (measure when wiring combat).
+- Pipe metal-pixel collision: per-pixel mask vs. tight AABB of opaque pixels (byte cost).
+- Flower collision: decorative only vs. soft blockers.
 - Default ability key bindings; settings screen layout.
-- Font glyph metrics and character coverage (when font returns to the sheet).
+- Font choice and glyph metrics (current sheet font deferred).
 - Audio design (deferred).
-- Exact sheet layout for pipes, font, and other non-player art.
+- Real tile art on the sheet vs. keeping code-painted placeholders.

@@ -10,14 +10,16 @@ import {
   TARGET_VIEW_HEIGHT,
   TILE_SIZE,
 } from './constants';
-import { clearPressedKeys, initInput, wasPressed } from './input';
-import { bakeTiles, generateMap, getTile, getTileSolid, tileCanvases } from './map';
-import { unlockedColors } from './palette';
-import { getPlayerHitbox, player, updatePlayer } from './player';
-import { createSprite, loadSpriteSheet, rebakeAllSprites } from './sprites';
+import { clearPressedKeys, initInput } from './input';
+import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
+import { player, updatePlayer } from './player';
+import { createSprite, loadSpriteSheet } from './sprites';
 
 const canvas = document.querySelector('#c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+
+// Loaded only when import.meta.env.DEV — dropped from production entry
+let debug: typeof import('./debug') | undefined;
 
 // The visible slice of the world, in world pixels; recomputed on resize
 let viewWidth = 1;
@@ -49,6 +51,10 @@ async function main(): Promise<void> {
   generateMap(1);
   bakeTiles();
   initInput();
+  if (import.meta.env.DEV) {
+    debug = await import('./debug');
+    debug.initDebugProps();
+  }
   window.addEventListener('resize', resize);
   resize();
   requestAnimationFrame(gameLoop);
@@ -61,26 +67,12 @@ function gameLoop(time: number): void {
   const dt = Math.min(time - lastTime, 1000 / 30);
   lastTime = time;
 
-  handleDebugKeys();
+  if (debug) {
+    debug.handleDebugKeys();
+  }
   updatePlayer(dt);
   render();
   clearPressedKeys();
-}
-
-let showHitboxes = false;
-
-// DEBUG ONLY: keys 1-7 toggle rainbow colors; 8 toggles hitbox outlines.
-function handleDebugKeys(): void {
-  for (let i = 0; i < 7; i++) {
-    if (wasPressed('Digit' + (i + 1))) {
-      unlockedColors[i] = !unlockedColors[i];
-      rebakeAllSprites();
-      bakeTiles();
-    }
-  }
-  if (wasPressed('Digit8')) {
-    showHitboxes = !showHitboxes;
-  }
 }
 
 function render(): void {
@@ -116,37 +108,18 @@ function render(): void {
 
   ctx.drawImage(playerSprite, Math.floor(player.x - cameraX), Math.floor(player.y - cameraY));
 
-  if (showHitboxes) {
-    for (let ty = firstTileY; ty <= lastTileY; ty++) {
-      for (let tx = firstTileX; tx <= lastTileX; tx++) {
-        const solid = getTileSolid(tx, ty);
-        if (solid) {
-          debugRect(
-            Math.floor(solid.x - cameraX),
-            Math.floor(solid.y - cameraY),
-            solid.w,
-            solid.h,
-            '#ff0'
-          );
-        }
-      }
-    }
-    const hit = getPlayerHitbox();
-    debugRect(Math.floor(hit.x - cameraX), Math.floor(hit.y - cameraY), hit.w, hit.h, '#f00');
+  if (debug) {
+    debug.drawDebugOverlay(
+      ctx,
+      cameraX,
+      cameraY,
+      firstTileX,
+      firstTileY,
+      lastTileX,
+      lastTileY,
+      viewHeight
+    );
   }
-
-  // DEBUG overlay
-  ctx.fillStyle = '#fff';
-  ctx.font = '5px monospace';
-  ctx.fillText('arrows: move / 1-7: colors / 8: hitboxes', 3, viewHeight - 3);
-}
-
-function debugRect(x: number, y: number, w: number, h: number, color: string): void {
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, w, 1);
-  ctx.fillRect(x, y + h - 1, w, 1);
-  ctx.fillRect(x, y, 1, h);
-  ctx.fillRect(x + w - 1, y, 1, h);
 }
 
 function clamp(value: number, min: number, max: number): number {

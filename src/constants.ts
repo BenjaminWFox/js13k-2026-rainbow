@@ -6,7 +6,7 @@ export const TILE_SIZE = 11;
 
 // Single-frame unicorn in sprites.png (bottom-left), drawn 1:1
 export const PLAYER_SPRITE_X = 0;
-export const PLAYER_SPRITE_Y = 81;
+export const PLAYER_SPRITE_Y = 0;
 export const PLAYER_SPRITE_W = 11;
 export const PLAYER_SPRITE_H = 19;
 export const PLAYER_HIT = 11;
