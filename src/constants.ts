@@ -2,20 +2,19 @@
 // visible world height is as close to this as possible.
 export const TARGET_VIEW_HEIGHT = 250;
 
-export const TILE_SIZE = 24;
+export const TILE_SIZE = 11;
 
-// Native unicorn frame size in sprites-squared.png (all directions are 16x16)
-export const PLAYER_SIZE = 16;
-export const PLAYER_HIT = 12;
-export const PLAYER_PIXEL_SCALE = 2;
+// Single-frame unicorn in sprites.png (bottom-left), drawn 1:1
+export const PLAYER_SPRITE_X = 0;
+export const PLAYER_SPRITE_Y = 81;
+export const PLAYER_SPRITE_W = 11;
+export const PLAYER_SPRITE_H = 19;
+export const PLAYER_HIT = 11;
 
-export const PLAYER_WIDTH = PLAYER_SIZE * PLAYER_PIXEL_SCALE;
-export const PLAYER_HEIGHT = PLAYER_WIDTH;
+export const PLAYER_WIDTH = PLAYER_SPRITE_W;
+export const PLAYER_HEIGHT = PLAYER_SPRITE_H;
 export const MAP_WIDTH = 100;
 export const MAP_HEIGHT = 100;
 
 // Pixels per millisecond
-export const PLAYER_SPEED = 0.11;
-
-// Milliseconds per walk animation frame
-export const WALK_FRAME_DURATION = 130;
+export const PLAYER_SPEED = 0.05;

@@ -8,7 +8,7 @@ export const TILE_BUSH_SMALL = 3;
 export const TILE_WALL = 4;
 
 // Centered solid size in world pixels; 0 = walkable
-const TILE_HIT = [0, 12, TILE_SIZE, 6, TILE_SIZE];
+const TILE_HIT = [0, 11, TILE_SIZE, 6, TILE_SIZE];
 
 const tiles = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
 
@@ -106,7 +106,7 @@ export function generateMap(seed: number): void {
 export const tileCanvases: HTMLCanvasElement[] = [];
 
 export function bakeTiles(): void {
-  const painters = [paintGrass, paintBush12, paintWater, paintBush6, paintWall];
+  const painters = [paintGrass, paintBush11, paintWater, paintBush6, paintWall];
   painters.forEach((paint, tile) => {
     let canvas = tileCanvases[tile];
     if (!canvas) {
@@ -140,8 +140,8 @@ function paintBushBlob(ctx: CanvasRenderingContext2D, size: number): void {
   ctx.fillRect(inset + 2, inset + 1, highlight, Math.max(2, size / 2 - 1));
 }
 
-function paintBush12(ctx: CanvasRenderingContext2D): void {
-  paintBushBlob(ctx, 12);
+function paintBush11(ctx: CanvasRenderingContext2D): void {
+  paintBushBlob(ctx, 11);
 }
 
 function paintBush6(ctx: CanvasRenderingContext2D): void {
@@ -152,7 +152,8 @@ function paintWall(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.4));
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.55));
-  ctx.fillRect(4, 4, TILE_SIZE - 8, TILE_SIZE - 8);
+  const inset = 2;
+  ctx.fillRect(inset, inset, TILE_SIZE - inset * 2, TILE_SIZE - inset * 2);
 }
 
 function paintWater(ctx: CanvasRenderingContext2D): void {

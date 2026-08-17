@@ -79,8 +79,9 @@ from the pipe**, recoloring the world as it passes.
   - Maximum mana **grows with each pipe destroyed**.
   - Exact max-mana curve, regen rate, and per-ability costs: **TBD** (tune during development).
 - **Base attack:** headbutt (melee, always available, costs no mana).
-- **Hitboxes:** one centered 12×12 box on the 16×16 sprite, used for every facing
-  (then × `PLAYER_PIXEL_SCALE`). Movement collision does not change with direction.
+- **Hitboxes:** 11×11 aligned to the **bottom** of the 11×19 player sprite (horn/head
+  sticks out above). Same box for every facing; sprite facing art is TBD.
+- Movement collision uses that hitbox only.
 
 ### Powers (one per released color)
 
@@ -133,8 +134,8 @@ render loop does nothing but `drawImage`:
 1. **Load** `sprites.png` once; draw it to an offscreen canvas and read it with
    `getImageData` to get raw pixels.
 2. **Bake:** for each sprite frame, write pixels into a dedicated offscreen canvas, applying
-   the current palette state. Baking also handles the flips (vertical for up-facing, horizontal
-   for right-facing) so the render loop never uses `ctx.scale`.
+   the current palette state. Optional flips are supported by the baker but **not used for
+   the player yet** (facing art TBD).
 3. **Render loop:** pure `drawImage(bakedCanvas, x, y)` calls. Zero per-pixel work per frame.
 4. **On color unlock:** re-bake affected sprites **once**, then resume pure `drawImage`.
 
@@ -165,10 +166,9 @@ For the wave effect (color returning outward from a destroyed pipe), the working
 
 ### Animation
 
-- Sprites are frame-animated (3 frames per direction for the player). The baked canvases are
-  per-frame; an entity tracks a `frame` accumulator advanced by delta time (as in the sample
-  game) and the renderer picks the baked canvas for the current frame.
-- Frame roles: **frame 0 is the standing/idle pose; walking alternates frames 1 and 2.**
+- **Player (current):** single static frame — no walk cycle, no facing flips.
+- **Future:** when multi-frame art lands, prefer frame 0 = idle and frames 1–2 = walk
+  alternating, baked per direction (or derived by flip if the art supports it).
 
 ### Resolution & display
 
@@ -178,18 +178,17 @@ For the wave effect (color returning outward from a destroyed pipe), the working
   cover the window at that scale with `image-rendering: pixelated`. Pixels stay crisp at any
   window size; the visible world area varies slightly with window shape.
 - Target visibility is **±125px** from the player (`TARGET_VIEW_HEIGHT / 2`). Horizontal
-  reach depends on window aspect ratio. Player art scale (`PLAYER_PIXEL_SCALE`) is
-  independent of this camera zoom.
+  reach depends on window aspect ratio. Sprites and tiles are drawn **1:1** in world
+  pixels; only the whole canvas is integer-upscaled to the window.
 - *Tunable:* `TARGET_VIEW_HEIGHT` is the single camera zoom knob.
 
 ### World / tilemap
 
-- **Tile size: 24px** — matches the player's world hitbox (`12 × PLAYER_PIXEL_SCALE`), so a
-  one-tile gap is exactly wide enough to walk through.
-  - 12×12 solid (large bush), centered in the cell
+- **Tile size: 11px** — matches the player's hitbox, so a one-tile gap is walkable.
+  - 11×11 solid (large bush), fills the cell
   - 6×6 solid (small bush), centered in the cell
-  - Water and map-edge walls fill the full 24×24 cell
-- **World: 100×100 tiles (2400×2400px)** to start. Tunable; the authoring approach is not
+  - Water and map-edge walls fill the full 11×11 cell
+- **World: 100×100 tiles (1100×1100px)** to start. Tunable; the authoring approach is not
   sensitive to dimensions.
 - **Authoring: hybrid** — a hand-placed skeleton (pipes, checkpoints, biome regions,
   major walls) with seeded procedural decoration/fill.
@@ -205,19 +204,20 @@ For the wave effect (color returning outward from a destroyed pipe), the working
 
 ## 4. Sprites
 
-### Sheet: `public/sprites-squared.png`
+### Sheet: `public/sprites.png` (250×100)
 
-All player frames are 16×16. Other world art remains on `sprites.png` for now.
+Current shipped player art:
 
 | Region | Coordinates | Description |
 |--------|-------------|-------------|
-| Player left/right | `sprites-squared.png` (0,0), 16×16, 3 frames | Authored facing **left**; flip **horizontally** for right. |
-| Player up/down | `sprites-squared.png` (0,16), 16×16, 3 frames | Authored facing **down**; flip **vertically** for up. |
-| Pipe | ~(0,41)–(27,54) | Siphon pipe segments (exact frame boxes TBD). |
-| Bitmap font | right of pipe, ~y41–54 | `0123456789ABC…` glyphs (exact glyph size/coverage TBD). |
-| Palette legend | y57 (spaced), y59 (packed) | Reference strip of the 11 palette colors. Not drawn in-game. |
+| Player | (0,81), 11×19, single frame | Authored facing **down**. Drawn **1:1**, no facing flips (behavior TBD). |
 
-The player sprite is the **first implementation focus**.
+Older layout notes (pipe / font / palette legend) from earlier sheet drafts are **outdated** —
+re-document those regions when they are re-added to this sheet. Placeholder tiles (grass,
+bushes, water, walls) are currently **code-painted**, not read from the sheet.
+
+Dev-only / not shipped: `reference/sprites-grey.png`, `public/sprites-unicorn.png`,
+`public/sprites-squared.png` (superseded experiments).
 
 ### Palette (11 colors)
 
@@ -240,21 +240,27 @@ the rainbow colors.
 | Violet  | `a656ff` | `aaaaaa`    | |
 | Neutral | `000000` | unchanged   | Outlines. |
 | Neutral | `747474` | unchanged   | Mid-grey shading. |
-| Neutral | `cecece` | unchanged   | Light grey (unicorn body). |
-| Neutral | `ffffff` | unchanged   | White. |
+| Neutral | `cecece` | unchanged   | Light grey. |
+| Neutral | `ffffff` | unchanged   | White (current unicorn body). |
 
 ### Asset rules
 
 - `sprites-grey.png` is a **dev-only desaturation reference**; never ship it.
-- New sprites (minibosses, enemies, tiles, final boss, portal) are added to `sprites.png`
-  using only the 11 palette colors, so the bake system colors them for free.
+- Do not ship superseded player sheets (`sprites-unicorn.png`, `sprites-squared.png`) in the
+  final package — keep at most one active `sprites.png`.
+- New sprites (minibosses, enemies, tiles, final boss, portal) should be added to
+  `sprites.png` using only the 11 palette colors (plus near-quantized variants mapped in
+  `palette.ts`), so the bake system colors them for free.
+- Placeholder world tiles may stay code-painted until real tile art lands on the sheet.
 
 ---
 
 ## 5. Open Questions / TBD
 
+- Player facing / walk animation behavior (art + code).
 - Mana curve: max per pipe destroyed, regen rate, per-ability costs.
 - Regular enemy roster and behaviors.
 - Default ability key bindings; settings screen layout.
-- Font glyph metrics and character coverage.
+- Font glyph metrics and character coverage (when font returns to the sheet).
 - Audio design (deferred).
+- Exact sheet layout for pipes, font, and other non-player art.

@@ -2,8 +2,10 @@ import {
   MAP_HEIGHT,
   MAP_WIDTH,
   PLAYER_HEIGHT,
-  PLAYER_PIXEL_SCALE,
-  PLAYER_SIZE,
+  PLAYER_SPRITE_H,
+  PLAYER_SPRITE_W,
+  PLAYER_SPRITE_X,
+  PLAYER_SPRITE_Y,
   PLAYER_WIDTH,
   TARGET_VIEW_HEIGHT,
   TILE_SIZE,
@@ -11,16 +13,7 @@ import {
 import { clearPressedKeys, initInput, wasPressed } from './input';
 import { bakeTiles, generateMap, getTile, getTileSolid, tileCanvases } from './map';
 import { unlockedColors } from './palette';
-import {
-  currentPlayerFrame,
-  DIR_DOWN,
-  DIR_LEFT,
-  DIR_RIGHT,
-  DIR_UP,
-  getPlayerHitbox,
-  player,
-  updatePlayer,
-} from './player';
+import { getPlayerHitbox, player, updatePlayer } from './player';
 import { createSprite, loadSpriteSheet, rebakeAllSprites } from './sprites';
 
 const canvas = document.querySelector('#c') as HTMLCanvasElement;
@@ -45,29 +38,13 @@ function resize(): void {
   ctx.imageSmoothingEnabled = false;
 }
 
-// playerFrames[direction][frameIndex]
-const playerFrames: HTMLCanvasElement[][] = [];
+let playerSprite: HTMLCanvasElement;
 
 async function main(): Promise<void> {
   await loadSpriteSheet('sprites.png');
 
-  // 16x16 frames: left at y=0, down at y=16; up/right are flips
-  for (const direction of [DIR_DOWN, DIR_UP, DIR_LEFT, DIR_RIGHT]) {
-    const sourceY = direction === DIR_DOWN || direction === DIR_UP ? PLAYER_SIZE : 0;
-    const flipH = direction === DIR_RIGHT;
-    const flipV = direction === DIR_UP;
-    playerFrames[direction] = [0, 1, 2].map((frame) =>
-      createSprite(
-        frame * PLAYER_SIZE,
-        sourceY,
-        PLAYER_SIZE,
-        PLAYER_SIZE,
-        flipH,
-        flipV,
-        PLAYER_PIXEL_SCALE
-      )
-    );
-  }
+  // Single 11x19 frame, drawn 1:1 with no facing flips (behavior TBD)
+  playerSprite = createSprite(PLAYER_SPRITE_X, PLAYER_SPRITE_Y, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
 
   generateMap(1);
   bakeTiles();
@@ -137,8 +114,7 @@ function render(): void {
     }
   }
 
-  const frame = playerFrames[player.facing][currentPlayerFrame()];
-  ctx.drawImage(frame, Math.floor(player.x - cameraX), Math.floor(player.y - cameraY));
+  ctx.drawImage(playerSprite, Math.floor(player.x - cameraX), Math.floor(player.y - cameraY));
 
   if (showHitboxes) {
     for (let ty = firstTileY; ty <= lastTileY; ty++) {

@@ -1,12 +1,10 @@
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
+  PLAYER_HEIGHT,
   PLAYER_HIT,
-  PLAYER_PIXEL_SCALE,
-  PLAYER_SIZE,
   PLAYER_SPEED,
   TILE_SIZE,
-  WALK_FRAME_DURATION,
 } from './constants';
 import { isDown } from './input';
 import { getTileSolid } from './map';
@@ -22,11 +20,7 @@ export const player = {
   y: (MAP_HEIGHT / 2) * TILE_SIZE,
   facing: DIR_DOWN,
   moving: false,
-  walkTime: 0,
 };
-
-// Frame 0 is the standing pose; walking alternates between frames 1 and 2
-const WALK_SEQUENCE = [1, 2];
 
 export function updatePlayer(dt: number): void {
   let dx = 0;
@@ -46,7 +40,6 @@ export function updatePlayer(dt: number): void {
 
   player.moving = dx !== 0 || dy !== 0;
   if (!player.moving) {
-    player.walkTime = 0;
     return;
   }
 
@@ -58,15 +51,6 @@ export function updatePlayer(dt: number): void {
 
   const speed = PLAYER_SPEED * (dx !== 0 && dy !== 0 ? Math.SQRT1_2 : 1);
   moveWithCollision(dx * speed * dt, dy * speed * dt);
-  player.walkTime += dt;
-}
-
-export function currentPlayerFrame(): number {
-  if (!player.moving) {
-    return 0;
-  }
-  const step = Math.floor(player.walkTime / WALK_FRAME_DURATION);
-  return WALK_SEQUENCE[step % WALK_SEQUENCE.length];
 }
 
 const OVERLAP_EPS = 1e-6;
@@ -162,7 +146,7 @@ function maxOverlappingTileEdge(
   return best;
 }
 
-/** World-space hitbox: centered 12x12 on the 16x16 sprite, then pixel-scaled. */
+/** 11x11 hitbox aligned to the bottom of the 11x19 sprite (head sticks out above). */
 export function getPlayerHitbox(
   x = player.x,
   y = player.y
@@ -172,7 +156,10 @@ export function getPlayerHitbox(
   w: number;
   h: number;
 } {
-  const inset = ((PLAYER_SIZE - PLAYER_HIT) / 2) * PLAYER_PIXEL_SCALE;
-  const size = PLAYER_HIT * PLAYER_PIXEL_SCALE;
-  return { x: x + inset, y: y + inset, w: size, h: size };
+  return {
+    x,
+    y: y + (PLAYER_HEIGHT - PLAYER_HIT),
+    w: PLAYER_HIT,
+    h: PLAYER_HIT,
+  };
 }
