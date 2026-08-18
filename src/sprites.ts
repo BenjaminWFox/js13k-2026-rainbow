@@ -11,6 +11,9 @@ interface BakedSprite {
   /** Quarter-turns counter-clockwise: 0–3 */
   rot90: number;
   pixelScale: number;
+  /** If set, sheet pixels of this rgb are treated as `recolorTo` before palette bake. */
+  recolorFrom: number;
+  recolorTo: number;
 }
 
 let sheet: ImageData;
@@ -36,6 +39,10 @@ export async function loadSpriteSheet(url: string): Promise<void> {
  *
  * Transform order: flip in source space, then rotate 90° CCW `rot90` times.
  * Odd rotations swap width/height.
+ *
+ * `recolorFrom`/`recolorTo` swap an authored rgb (e.g. the pipe stripe) to a
+ * rainbow color and skip the locked-palette remap, so the stripe stays colored
+ * even while the rest of the world is grey.
  */
 export function createSprite(
   sourceX: number,
@@ -45,7 +52,9 @@ export function createSprite(
   flipH = false,
   flipV = false,
   rot90 = 0,
-  pixelScale = 1
+  pixelScale = 1,
+  recolorFrom = 0,
+  recolorTo = 0
 ): HTMLCanvasElement {
   const rot = ((rot90 % 4) + 4) % 4;
   const outW = (rot % 2 === 0 ? width : height) * pixelScale;
@@ -63,6 +72,8 @@ export function createSprite(
     flipV,
     rot90: rot,
     pixelScale,
+    recolorFrom,
+    recolorTo,
   };
   bake(sprite);
   bakedSprites.push(sprite);
@@ -70,7 +81,18 @@ export function createSprite(
 }
 
 function bake(sprite: BakedSprite): void {
-  const { sourceX, sourceY, width, height, flipH, flipV, rot90, pixelScale } = sprite;
+  const {
+    sourceX,
+    sourceY,
+    width,
+    height,
+    flipH,
+    flipV,
+    rot90,
+    pixelScale,
+    recolorFrom,
+    recolorTo,
+  } = sprite;
   const swapped = rot90 % 2 === 1;
   const outWidth = (swapped ? height : width) * pixelScale;
   const outHeight = (swapped ? width : height) * pixelScale;
@@ -89,12 +111,16 @@ function bake(sprite: BakedSprite): void {
       if (alpha === 0) {
         continue;
       }
-      const rgb =
+      let rgb =
         (sheet.data[srcIndex] << 16) | (sheet.data[srcIndex + 1] << 8) | sheet.data[srcIndex + 2];
-      const mapped = currentColor(rgb);
-      const r = (mapped >> 16) & 255;
-      const g = (mapped >> 8) & 255;
-      const b = mapped & 255;
+      if (recolorTo && rgb === recolorFrom) {
+        rgb = recolorTo;
+      } else {
+        rgb = currentColor(rgb);
+      }
+      const r = (rgb >> 16) & 255;
+      const g = (rgb >> 8) & 255;
+      const b = rgb & 255;
 
       let dx = x;
       let dy = y;

@@ -19,6 +19,8 @@ const props: DebugProp[] = [];
 const ATLAS: { x: number; y: number; w: number; h: number }[] = [
   { x: 11, y: 0, w: 11, h: 19 }, // Business Man
   { x: 22, y: 0, w: 11, h: 19 }, // Business Boss
+  { x: 0, y: 19, w: 6, h: 23 }, // Portal left
+  { x: 6, y: 19, w: 6, h: 23 }, // Portal right
   // Common enemies 7x9 from (33,0)
   ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ x: 33 + i * 7, y: 0, w: 7, h: 9 })),
   // Pipes from (33,9)
@@ -68,12 +70,13 @@ export function initDebugProps(): void {
           break;
         }
       }
-      props.push({
-        canvas: canvases[i],
-        x: tx * TILE_SIZE + Math.floor((TILE_SIZE - canvases[i].width) / 2),
-        // Bottom-align to the tile so tall sprites (11x19) sit like the player
-        y: ty * TILE_SIZE + TILE_SIZE - canvases[i].height,
-      });
+      // Point at which random sprites are scattered around the map
+      // props.push({
+      //   canvas: canvases[i],
+      //   x: tx * TILE_SIZE + Math.floor((TILE_SIZE - canvases[i].width) / 2),
+      //   // Bottom-align to the tile so tall sprites (11x19) sit like the player
+      //   y: ty * TILE_SIZE + TILE_SIZE - canvases[i].height,
+      // });
     }
   }
 }

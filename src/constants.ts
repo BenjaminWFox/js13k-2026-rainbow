@@ -17,4 +17,4 @@ export const MAP_WIDTH = 100;
 export const MAP_HEIGHT = 100;
 
 // Pixels per millisecond
-export const PLAYER_SPEED = 0.05;
+export const PLAYER_SPEED = 0.25;

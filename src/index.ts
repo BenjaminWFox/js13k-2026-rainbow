@@ -12,7 +12,7 @@ import {
 } from './constants';
 import { clearPressedKeys, initInput } from './input';
 import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
-import { generatePipes, pipePieces } from './pipes';
+import { generatePipes, pipePieces, portalBacks, portalFronts } from './pipes';
 import { player, updatePlayer } from './player';
 import { createSprite, loadSpriteSheet } from './sprites';
 
@@ -108,7 +108,15 @@ function render(): void {
     }
   }
 
+  for (const piece of portalBacks) {
+    ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
+  }
+
   for (const piece of pipePieces) {
+    ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
+  }
+
+  for (const piece of portalFronts) {
     ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
   }
 
