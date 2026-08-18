@@ -30,6 +30,8 @@ These rules govern how code is written for this project.
    - World data + gameplay logic: ~5–6 KB
    - Audio (ZzFX/ZzFXM, deferred): ~1.5–2 KB
    - Headroom: ~1–2 KB
+   - Pause-card UI (level-up + pipe-unlock overlays) and the between-run scrap shop are
+     new byte consumers. Shop rows are the first cut if the zip is tight.
 7. **No external dependencies at runtime.** Everything is hand-rolled or vendored (ZzFX/ZzFXM
    already vendored in the sample).
 8. **TypeScript strictness stays on.** Types are free — they're erased at build time.
@@ -44,24 +46,43 @@ These rules govern how code is written for this project.
 
 You are a **unicorn** living in a bright world painted with all seven colors of the rainbow.
 An evil corporation has opened a **portal** into your world and is siphoning the color away
-through seven **pipes**. When the game begins, the world is entirely **greyscale**.
+through seven **pipes**. When a run begins, the world is entirely **greyscale**.
 
 ### Structure
 
-- **Genre:** top-down, pixel sprite-based adventure (old-school Legend of Zelda feel).
-- **World:** one single open-world level, freely navigable, rendered with a smooth-scrolling
-  camera that follows the player.
-- **Objective:** find all 7 pipes scattered across the world. Each pipe is guarded by a
-  **miniboss**. Defeating a miniboss destroys its pipe and **releases one color** back into
-  the world.
-- **Order:** pipes can be tackled in **any order**. Every miniboss must be beatable with the
-  base kit (headbutt) alone. Difficulty can scale with the number of pipes already destroyed.
-- **Finale:** once all 7 colors are released, the **final boss** comes through the portal to
-  investigate, triggering the end fight.
-- **Pipe areas:** fully open for the initial pass — minibosses live in the open world and can
-  be fought or fled freely.
-  - *Potential later:* gated arenas that seal when entered until the miniboss dies, to keep
-    fights focused and prevent kiting bosses across the map.
+- **Genre:** top-down, pixel sprite-based **survivors-like** (Vampire Survivors-like).
+  Movement is the only player control; all owned abilities auto-fire.
+- **World:** one single open-world map, freely navigable, rendered with a smooth-scrolling
+  camera that follows the player. Keep the current pipe layout and size as the starting
+  point; distances are tuning TBD.
+- **A run:** the player spawns at the **world center** with the starting kit. Colors,
+  powers, XP, and in-run stats **reset** each run. Death ends the run after revives are
+  spent. Scrap and shop ranks persist between runs (see Scrap).
+- **Objective:** find all 7 pipes. Each pipe is guarded by a **miniboss**. Defeating a
+  miniboss destroys its pipe, **releases one color**, and **grants that color's power
+  immediately**. The power then starts auto-firing.
+- **Order:** pipes can be tackled in **any order**. Every miniboss must be beatable with
+  the starting kit (horn + stomp) alone.
+- **Finale:** once all 7 colors are released, the **final boss** comes through the portal
+  to investigate, triggering the end fight.
+- **Win:** destroy all 7 pipes, then beat the final boss. No survival timer yet — revisit
+  if runs feel too long or too short.
+- **Pipe areas:** fully open — minibosses live at their pipes and can be fought or fled.
+  The around-player swarm continues during the fight (no sealed arena).
+
+### Run loop
+
+1. **Start:** center spawn, greyscale world, horn + stomp owned, shop starting stats/HP/speed
+   applied.
+2. **Play:** move only. Enemies spawn around the player. Crystals and scrap magnet in.
+3. **Level-up:** pause, pick 1 card, resume.
+4. **Pipe:** walk to a miniboss, kill it. Pause overlay (same family as level-up cards):
+   color unlocked, power name, what it does. Then that power auto-fires.
+5. **Death:** if a revive remains, revive **in place** and continue. Otherwise the run ends.
+6. **Win or death overlay**, then the **scrap shop**, then the next run.
+
+If a level-up and a pipe-unlock would both pause at the same time, do not overlap the
+overlays — queue them (order TBD).
 
 ### Color release
 
@@ -71,34 +92,120 @@ from the pipe**, recoloring the world as it passes.
 > Fallback (if the wave costs too many bytes): the color returns instantly everywhere with a
 > brief celebratory flash.
 
+The pause overlay still fires in either case.
+
 ### Player
 
-- **Health:** standard health pool. On death, respawn at a home/checkpoint with world
-  progress kept (released colors stay released).
-  - *Stretch:* "hardcore" mode — one life, full restart on death.
-- **Mana:** a mana bar that replenishes over time.
-  - Starts at **0 maximum mana** (no abilities usable) until the first pipe is destroyed.
-  - Maximum mana **grows with each pipe destroyed**.
-  - Exact max-mana curve, regen rate, and per-ability costs: **TBD** (tune during development).
-- **Base attack:** headbutt (melee, always available, costs no mana).
+- **Health:** standard health pool. CON (in-run and shop) increases max HP. Shop Start HP
+  adds extra max HP at run start (amounts TBD).
+- **No mana.** Abilities do not spend a resource; they auto-fire on independent cooldowns.
+- **Starting kit** (owned at run start, always auto-firing):
+  - **Horn** — melee damage in the direction the player is facing / last moved.
+  - **Stomp** — self-centered area attack with a small knock-back to enemies.
 - **Hitboxes:** 11×11 aligned to the **bottom** of the 11×19 player sprite (horn/head
   sticks out above). Same box for every facing; sprite facing art is TBD.
 - Movement collision uses that hitbox only.
 
+### Auto-combat
+
+- Every owned ability fires on **its own cooldown**. Several can fire at once.
+- **No ability keys.** The player never triggers attacks manually.
+- Targeting:
+  - Horn → facing / last-move direction (idle default facing TBD).
+  - Fireball, frostball → **nearest enemy**.
+  - Stomp, flame nova, frost nova, heal, shield → **self-centered**.
+- **Heal** (green): auto-fires a small HP pulse; show a small green `+` when it ticks.
+- **Shield** (violet): auto-fires a brief absorb; show a visible ring or half-circle
+  around the player while active.
+- **Yellow speed** is not a fireable ability (see Powers).
+- Cooldown, damage, knock-back, heal amount, and shield duration/absorb: **TBD**.
+
 ### Powers (one per released color)
+
+Destroying a pipe **grants that power immediately** (it does not go through the level-up
+draft). Color damage powers scale with **WIS**. Heal, shield, and speed ignore STR/WIS.
 
 | Color  | Hex      | Power                                    |
 |--------|----------|------------------------------------------|
-| Red    | `e40404` | Fireball — ranged damage                  |
-| Orange | `ff8200` | Flame nova — melee area damage            |
-| Yellow | `f1e300` | Dash                                      |
-| Green  | `08ba00` | Heal                                      |
-| Blue   | `0030e2` | Frost nova — melee area freeze            |
-| Indigo | `6e00ef` | Frostball — ranged single-target freeze   |
+| Red    | `e40404` | Fireball — ranged damage (nearest enemy)  |
+| Orange | `ff8200` | Flame nova — self-centered area damage    |
+| Yellow | `f1e300` | Speed — passive move-speed increase       |
+| Green  | `08ba00` | Heal — cooldown HP pulse                  |
+| Blue   | `0030e2` | Frost nova — self-centered area freeze    |
+| Indigo | `6e00ef` | Frostball — nearest-enemy freeze          |
 | Violet | `a656ff` | Damage shield — absorbs incoming damage while active |
+
+**Yellow speed:** not fireable. Unlocking yellow **immediately** raises move speed. Speed
+then joins the level-up pool and can stack like other owned powers. Shop Start Speed
+stacks with this.
+
+Frost nova / frostball still freeze.
+
+### Stats
+
+In-run level-up picks and shop starting ranks **stack**.
+
+| Stat | Effect |
+|------|--------|
+| STR | Increases starting-kit damage only (horn, stomp) |
+| DEX | Decreases damage taken |
+| CON | Increases player max HP |
+| WIS | Increases color damage powers (fireball, frostball, flame nova, frost nova) |
+
+Heal, shield, and speed ignore STR/WIS. Exact per-pick amounts: **TBD**.
+
+### XP and level-up
+
+- Kills may drop **crystals** (in-run XP). Crystals have an inherent drop chance (TBD);
+  not every kill necessarily drops one.
+- Crystals **magnet** toward the player from a generous radius (classic survivors-like).
+  Magnet range is upgradeable in the scrap shop.
+- Filling the XP bar **pauses** the game. Pick **1** card from a base of **3**, then resume.
+  Luck can add a 4th and 5th card (see Scrap shop) — extras are chanced, not guaranteed.
+- **Draft pool:** STR / DEX / CON / WIS + every owned attack/power (horn, stomp, and any
+  color power already granted, including yellow speed). Repeat picks **stack**
+  (survivors-style levels). Exact per-stack effects TBD.
+- Duplicate cards in a single hand: TBD.
+
+### Scrap (must-have)
+
+Meta currency for between-run upgrades. Cut only if bytes force it; shop **rows** are
+the first thing to drop, not the whole system.
+
+- Drops in-run like crystals and is **magneted** the same way. Regular enemies drop a
+  small amount; minibosses and the final boss drop a chunk. Amounts and inherent chances
+  TBD.
+- Scrap magneted during the run is **kept on death or win**. Uncollected scrap on the
+  ground is lost.
+- Spent in a **between-run shop** (after the death or victory overlay), then the next
+  run starts.
+- Persist scrap + purchased ranks in **localStorage**. World progress, powers, XP, and
+  in-run stats are **not** saved.
+
+#### Scrap shop
+
+Each row can be bought **3 ranks**. Prices TBD. Not in the shop: starting horn/stomp
+levels, global cooldown/damage.
+
+| Row | 3 ranks |
+|-----|---------|
+| Luck | Extra draft cards are chanced. Start 0%. Ranks: **25/50/75%** for a 4th card; **20/40/60%** for a 5th, rolled **only if** the 4th was granted. |
+| STR, DEX, CON, WIS | Four separate starting-stat rows. Amounts per rank TBD. |
+| Start HP | Extra max HP at run start (beyond CON). Amounts TBD. |
+| Start Speed | Extra move speed at run start (beyond yellow). Amounts TBD. |
+| Magnet | Pull radius **+25%** per rank. |
+| XP gain | Relative crystal drop-chance **+33/66/100%** vs each enemy's inherent chance. |
+| Scrap gain | Relative scrap drop-chance **+33/66/100%** vs each enemy's inherent chance. |
+| Revive | **1/2/3** extra lives per run. Revive **in place**. HP restored and i-frames TBD. |
 
 ### Enemies
 
+- **Swarm:** regular enemies **constantly spawn around the player** (off-screen), wherever
+  the player is on the map. The map is never empty.
+- **Default scaling:** swarm pressure ramps with **pipes destroyed** (spawn rate, HP,
+  types — knobs TBD).
+- **Stretch difficulty modes:** Easy = no swarm scaling; Normal = pipes (default);
+  Hard = time in the run **and** pipes.
 - **Minibosses (7):** one per pipe. All share the **Business Man** sprite (intentional
   corporate facelessness). The only color on each is the **eyes**, tinted to the rainbow
   color that miniboss guards/steals. Each also has:
@@ -113,15 +220,14 @@ from the pipe**, recoloring the world as it passes.
 
 ### Controls
 
-- **Arrow keys:** movement.
-- **One key per ability** (headbutt + each unlocked power).
-- **Settings screen:** simple key-remapping UI so players can bind abilities to keys of their
-  choosing (supports non-QWERTY/non-English layouts).
-- Default ability bindings: **TBD**.
+- **WASD + arrow keys:** movement only.
+- No ability keys. No settings key-remap UI.
 
 ### Persistence
 
-- Progress saved to **localStorage**: released colors, destroyed pipes, player position/state.
+- **localStorage** holds scrap + scrap-shop ranks only (plus any future non-gameplay
+  settings if they exist).
+- A run does **not** save position, released colors, destroyed pipes, XP, or loadout.
 
 ### Audio
 
@@ -211,14 +317,16 @@ For the wave effect (color returning outward from a destroyed pipe), the working
   when an elbow's port has the highlight on the opposite side — H uses flipV
   (accent top), V uses flipV+rot90 (accent left). Outer + inner elbows cover all
   four corners at both accent modes.
-- **Authoring: hybrid** — pipes are seeded procedural for now; checkpoints / biome regions /
-  major walls remain hand-placed later, with seeded decoration/fill.
+- **Authoring: hybrid** — pipes are seeded procedural for now; map landmarks / biome
+  regions / major walls remain hand-placed later, with seeded decoration/fill.
+  (Landmarks are world dressing, not player respawn points — a run ends on death.)
   - *Fallback:* fully procedural world from a seed if the hybrid approach has issues.
 
 ### Game state
 
 - Flat entity array + plain module-level state, following the sample game's structure.
-- Save/load via a single small JSON blob in localStorage.
+- Save/load via a single small JSON blob in localStorage (scrap + shop ranks only;
+  see §2 Persistence).
 
 ---
 
@@ -319,13 +427,25 @@ the rainbow colors.
 
 ## 5. Open Questions / TBD
 
-- Player facing / walk animation behavior (art + code).
-- Mana curve: max per pipe destroyed, regen rate, per-ability costs.
+- Player facing / walk animation behavior (art + code). Horn idle default facing when
+  the player has not moved yet.
+- XP curve (crystals per level) and inherent crystal/scrap drop chances per enemy type.
+- Auto-combat numbers: cooldowns, damage, stomp knock-back, heal amount, shield
+  duration/absorb, yellow speed per stack.
+- Per-pick stat amounts (STR/DEX/CON/WIS) and whether CON heals current HP when max
+  HP grows.
+- Draft: can the same hand contain duplicate cards? Overlay queue order if level-up
+  and pipe-unlock coincide.
+- Revive: HP restored and i-frames (likely needed so a swarm does not instantly re-kill).
+- Scrap shop prices; Start HP / Start Speed / starting-stat amounts per rank.
+- World size / pipe distances (keep current layout; tune if a run is too long to walk).
+- Survival timer: none for now; add later if runs feel too long or too short.
+- Easy / Normal / Hard swarm scaling as a stretch (Easy = none; Normal = pipes; Hard =
+  time + pipes).
 - Regular enemy behaviors (HP, damage, movement patterns per office-supply type).
 - Exact per-enemy content hitbox rectangles (measure when wiring combat).
 - Pipe metal-pixel collision: per-pixel mask vs. tight AABB of opaque pixels (byte cost).
 - Flower collision: decorative only vs. soft blockers.
-- Default ability key bindings; settings screen layout.
 - Font choice and glyph metrics (current sheet font deferred).
 - Audio design (deferred).
 - Real tile art on the sheet vs. keeping code-painted placeholders.
