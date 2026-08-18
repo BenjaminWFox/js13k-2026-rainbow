@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   // Single 11x19 frame, drawn 1:1 with no facing flips (behavior TBD)
   playerSprite = createSprite(PLAYER_SPRITE_X, PLAYER_SPRITE_Y, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
 
-  generateMap(1);
+  generateMap();
   bakeTiles();
   generatePipes(1);
   initInput();

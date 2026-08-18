@@ -8,6 +8,7 @@ import {
 } from './constants';
 import { isDown } from './input';
 import { getTileSolid } from './map';
+import { pipePieces } from './pipes';
 
 export const DIR_DOWN = 0;
 export const DIR_UP = 1;
@@ -89,6 +90,18 @@ function boxCollides(x: number, y: number): boolean {
   return forEachOverlappingSolid(getPlayerHitbox(x, y), () => true);
 }
 
+function hitsSolid(
+  hit: { x: number; y: number; w: number; h: number },
+  solid: { x: number; y: number; w: number; h: number }
+): boolean {
+  return (
+    hit.x < solid.x + solid.w - OVERLAP_EPS &&
+    hit.x + hit.w > solid.x + OVERLAP_EPS &&
+    hit.y < solid.y + solid.h - OVERLAP_EPS &&
+    hit.y + hit.h > solid.y + OVERLAP_EPS
+  );
+}
+
 function forEachOverlappingSolid(
   hit: { x: number; y: number; w: number; h: number },
   visit: (solid: { x: number; y: number; w: number; h: number }) => boolean | undefined
@@ -101,13 +114,17 @@ function forEachOverlappingSolid(
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
       const solid = getTileSolid(tx, ty);
-      if (
-        solid &&
-        hit.x < solid.x + solid.w - OVERLAP_EPS &&
-        hit.x + hit.w > solid.x + OVERLAP_EPS &&
-        hit.y < solid.y + solid.h - OVERLAP_EPS &&
-        hit.y + hit.h > solid.y + OVERLAP_EPS
-      ) {
+      if (solid && hitsSolid(hit, solid)) {
+        found = true;
+        if (visit(solid)) {
+          return true;
+        }
+      }
+    }
+  }
+  for (const piece of pipePieces) {
+    for (const solid of piece.hits ?? []) {
+      if (hitsSolid(hit, solid)) {
         found = true;
         if (visit(solid)) {
           return true;

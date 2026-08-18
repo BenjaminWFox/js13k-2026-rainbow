@@ -2,6 +2,7 @@ import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
 import { wasPressed } from './input';
 import { bakeTiles, getTile, getTileSolid, TILE_GRASS } from './map';
 import { unlockedColors } from './palette';
+import { pipePieces } from './pipes';
 import { getPlayerHitbox } from './player';
 import { createSprite, rebakeAllSprites } from './sprites';
 
@@ -138,6 +139,26 @@ export function drawDebugOverlay(
             '#ff0'
           );
         }
+      }
+    }
+    for (const piece of pipePieces) {
+      for (const solid of piece.hits ?? []) {
+        if (
+          solid.x + solid.w < viewLeft ||
+          solid.x > viewRight ||
+          solid.y + solid.h < viewTop ||
+          solid.y > viewBottom
+        ) {
+          continue;
+        }
+        debugRect(
+          ctx,
+          Math.floor(solid.x - cameraX),
+          Math.floor(solid.y - cameraY),
+          solid.w,
+          solid.h,
+          '#0ff'
+        );
       }
     }
     const hit = getPlayerHitbox();

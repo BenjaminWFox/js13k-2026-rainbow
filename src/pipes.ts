@@ -2,10 +2,19 @@ import { MAP_HEIGHT, MAP_WIDTH, PLAYER_HIT, TILE_SIZE } from './constants';
 import { RAINBOW_COLORS } from './palette';
 import { createSprite } from './sprites';
 
+export interface HitBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface PipePiece {
   canvas: HTMLCanvasElement;
   x: number;
   y: number;
+  /** Collision boxes. Straights/caps use the sprite; elbows use two 6×5 arms. */
+  hits?: HitBox[];
 }
 
 export const pipePieces: PipePiece[] = [];
@@ -371,6 +380,38 @@ function curvePreview(
   };
 }
 
+function addPipePiece(canvas: HTMLCanvasElement, x: number, y: number, hits?: HitBox[]): void {
+  pipePieces.push({
+    canvas,
+    x,
+    y,
+    hits: hits ?? [{ x, y, w: canvas.width, h: canvas.height }],
+  });
+}
+
+/** Two 6×5 arms: 6px face matches the adjoining straight, 5px into the elbow. */
+function curveArmHits(x: number, y: number, curve: CurveOrient): HitBox[] {
+  const arm = 5;
+  const hits: HitBox[] = [];
+  const east = curve.ports[DIR_E];
+  if (east) {
+    hits.push({ x: x + CURVE_OUTER.w - arm, y: y + east.y - PORT, w: arm, h: PIPE_H });
+  }
+  const west = curve.ports[DIR_W];
+  if (west) {
+    hits.push({ x, y: y + west.y - PORT, w: arm, h: PIPE_H });
+  }
+  const south = curve.ports[DIR_S];
+  if (south) {
+    hits.push({ x: x + south.x - PORT, y: y + CURVE_OUTER.h - arm, w: PIPE_H, h: arm });
+  }
+  const north = curve.ports[DIR_N];
+  if (north) {
+    hits.push({ x: x + north.x - PORT, y, w: PIPE_H, h: arm });
+  }
+  return hits;
+}
+
 function pushStraight(
   cx: number,
   cy: number,
@@ -380,18 +421,18 @@ function pushStraight(
 ): { cx: number; cy: number } {
   const flip = isHorizontal(dir) ? hFlip : vFlip;
   if (dir === DIR_E) {
-    pipePieces.push({ canvas: straightH[flip ? 1 : 0], x: cx, y: cy - PORT });
+    addPipePiece(straightH[flip ? 1 : 0], cx, cy - PORT);
     return { cx: cx + ADVANCE, cy };
   }
   if (dir === DIR_W) {
-    pipePieces.push({ canvas: straightH[flip ? 1 : 0], x: cx - ADVANCE, y: cy - PORT });
+    addPipePiece(straightH[flip ? 1 : 0], cx - ADVANCE, cy - PORT);
     return { cx: cx - ADVANCE, cy };
   }
   if (dir === DIR_S) {
-    pipePieces.push({ canvas: straightV[flip ? 1 : 0], x: cx - PORT, y: cy });
+    addPipePiece(straightV[flip ? 1 : 0], cx - PORT, cy);
     return { cx, cy: cy + ADVANCE };
   }
-  pipePieces.push({ canvas: straightV[flip ? 1 : 0], x: cx - PORT, y: cy - ADVANCE });
+  addPipePiece(straightV[flip ? 1 : 0], cx - PORT, cy - ADVANCE);
   return { cx, cy: cy - ADVANCE };
 }
 
@@ -414,7 +455,7 @@ function pushCurve(
   }
   const x = cx - enter.x;
   const y = cy - enter.y;
-  pipePieces.push({ canvas: curve.canvas, x, y });
+  addPipePiece(curve.canvas, x, y, curveArmHits(x, y, curve));
 
   const exitFlip = !!curve.portFlip[exitSide];
   if (isHorizontal(dirOut)) {
@@ -430,13 +471,13 @@ function pushCap(cx: number, cy: number, dir: number, hFlip: boolean, vFlip: boo
   const canvas = caps[dir][flip ? 1 : 0];
   // Long border faces the pipe; 1px overlap into the run.
   if (dir === DIR_E) {
-    pipePieces.push({ canvas, x: cx - 1, y: cy - PORT - 1 });
+    addPipePiece(canvas, cx - 1, cy - PORT - 1);
   } else if (dir === DIR_W) {
-    pipePieces.push({ canvas, x: cx - 3, y: cy - PORT - 1 });
+    addPipePiece(canvas, cx - 3, cy - PORT - 1);
   } else if (dir === DIR_N) {
-    pipePieces.push({ canvas, x: cx - PORT - 1, y: cy - 3 });
+    addPipePiece(canvas, cx - PORT - 1, cy - 3);
   } else {
-    pipePieces.push({ canvas, x: cx - PORT - 1, y: cy - 1 });
+    addPipePiece(canvas, cx - PORT - 1, cy - 1);
   }
 }
 
