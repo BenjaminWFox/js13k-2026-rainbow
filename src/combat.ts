@@ -5,6 +5,7 @@ import {
   crowdControlAt,
   enemies,
   enemyHitbox,
+  FINAL_BOSS,
   hurtEnemyAt,
 } from './enemies';
 import { drawText } from './font';
@@ -67,6 +68,8 @@ export const BOLT_FIRE = 0;
 export const BOLT_FROST = 1;
 
 const cdTimer = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+/** Fireball, flame nova, heal, frost nova, frostball, shield. */
+const finaleCd = [0, 0, 0, 0, 0, 0];
 let hornFlash = 0;
 let stompFlash = 0;
 
@@ -269,6 +272,7 @@ export function updateCombat(
   });
 
   updateMinibossPowers(dt);
+  updateFinalePowers(dt);
 
   updateBolts(dt);
   for (let i = novas.length - 1; i >= 0; i--) {
@@ -287,11 +291,22 @@ export function updateCombat(
 
 export function resetCombat(): void {
   cdTimer.fill(0);
+  finaleCd.fill(0);
   hornFlash = 0;
   stompFlash = 0;
   bolts.length = 0;
   novas.length = 0;
   heals.length = 0;
+}
+
+/** Stagger the final boss's first volley so it doesn't dump every power on spawn. */
+export function primeFinalePowers(): void {
+  finaleCd[0] = 500;
+  finaleCd[1] = 1100;
+  finaleCd[2] = 2200;
+  finaleCd[3] = 1400;
+  finaleCd[4] = 800;
+  finaleCd[5] = 200;
 }
 
 function fireHorn(): void {
@@ -416,6 +431,64 @@ function updateMinibossPowers(dt: number): void {
       enemy.cd = SHIELD_COOLDOWN_MS;
     }
   }
+}
+
+function tickFinale(i: number, dt: number, baseCd: number, fire: () => boolean): void {
+  finaleCd[i] -= dt;
+  if (finaleCd[i] > 0) {
+    return;
+  }
+  if (fire()) {
+    finaleCd[i] += baseCd;
+  } else {
+    finaleCd[i] = 0;
+  }
+}
+
+function updateFinalePowers(dt: number): void {
+  let found = null;
+  for (const enemy of enemies) {
+    if (enemy.color === FINAL_BOSS) {
+      found = enemy;
+      break;
+    }
+  }
+  if (!found) {
+    return;
+  }
+  const boss = found;
+  const target = playerCenter();
+  const box = enemyHitbox(boss);
+  const x = box.x + box.w / 2;
+  const y = box.y + box.h / 2;
+  tickFinale(0, dt, FIREBALL_COOLDOWN_MS, () =>
+    spawnBolt(x, y, target.x, target.y, BOLT_FIRE, FIREBALL_DAMAGE, false)
+  );
+  tickFinale(1, dt, FLAME_NOVA_COOLDOWN_MS, () => {
+    fireNova(x, y, NOVA_RADIUS, FLAME_NOVA_DAMAGE, 0, '#ff8200', false);
+    return true;
+  });
+  tickFinale(2, dt, HEAL_COOLDOWN_MS, () => {
+    if (boss.hp >= boss.maxHp) {
+      return false;
+    }
+    boss.hp = Math.min(boss.maxHp, boss.hp + HEAL_AMOUNT);
+    return true;
+  });
+  tickFinale(3, dt, FROST_NOVA_COOLDOWN_MS, () => {
+    fireNova(x, y, NOVA_RADIUS, 0, FREEZE_MS, '#0030e2', false);
+    return true;
+  });
+  tickFinale(4, dt, FROSTBALL_COOLDOWN_MS, () =>
+    spawnBolt(x, y, target.x, target.y, BOLT_FROST, 0, false, FREEZE_MS)
+  );
+  tickFinale(5, dt, SHIELD_COOLDOWN_MS, () => {
+    if (boss.shield > 0) {
+      return false;
+    }
+    boss.shield = SHIELD_ABSORB;
+    return true;
+  });
 }
 
 /**

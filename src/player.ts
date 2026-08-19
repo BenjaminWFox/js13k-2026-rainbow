@@ -10,7 +10,17 @@ import { spawnExplosion } from './fx';
 import { isDown } from './input';
 import { getTileSolid } from './map';
 import { pipePieces } from './pipes';
-import { CON_HP_PER_RANK, STAT_CON, STAT_DEX, speedMul, totalStat } from './stats';
+import {
+  CON_HP_PER_RANK,
+  SHOP_REVIVE,
+  SHOP_START_HP,
+  START_HP_PER_RANK,
+  STAT_CON,
+  STAT_DEX,
+  shopRanks,
+  speedMul,
+  totalStat,
+} from './stats';
 
 export const player = {
   // Top-left corner of the player sprite, world-space pixels
@@ -20,18 +30,23 @@ export const player = {
   faceX: 1,
   faceY: 0,
   moving: false,
-  // Baseline 100 HP; CON raises the max, shop Start HP lands later
+  // Baseline 100 HP; CON and shop Start HP raise the max
   hp: 100,
   maxHp: 100,
   /** Remaining freeze (ms). Frozen entities take +25% damage. */
   frozen: 0,
   /** Remaining shield absorb (HP). Lasts until depleted. */
   shield: 0,
+  /** Extra lives remaining this run (from the shop Revive row). */
+  lives: 0,
+  /** Remaining i-frames (ms). Incoming damage is ignored while > 0. */
+  iframes: 0,
 };
 
-/** Death handling (revives, run-end overlay) lands with the run lifecycle phase. */
+const IFRAME_MS = 2000;
+
 export function damagePlayer(amount: number): void {
-  if (amount <= 0 || player.hp <= 0) {
+  if (amount <= 0 || player.hp <= 0 || player.iframes > 0) {
     return;
   }
   if (player.frozen > 0) {
@@ -59,7 +74,25 @@ export function damagePlayer(amount: number): void {
 }
 
 export function freezePlayer(ms: number): void {
+  if (player.iframes > 0) {
+    return;
+  }
   player.frozen = Math.max(player.frozen, ms);
+}
+
+/** Spend a life to stand back up at full HP with a short i-frame window. */
+export function tryRevive(): boolean {
+  if (player.hp > 0 || player.lives <= 0) {
+    return false;
+  }
+  player.lives--;
+  player.hp = player.maxHp;
+  player.frozen = 0;
+  player.iframes = IFRAME_MS;
+  const hit = getPlayerHitbox();
+  spawnExplosion(hit.x + hit.w / 2, hit.y + hit.h / 2, 0xffffff, 16);
+  spawnExplosion(hit.x + hit.w / 2, hit.y + hit.h / 2, 0xcecece, 10);
+  return true;
 }
 
 const DIAGONAL_RELEASE_MS = 100;
@@ -75,16 +108,22 @@ export function resetPlayer(): void {
   player.faceX = 1;
   player.faceY = 0;
   player.moving = false;
-  player.maxHp = 100 + CON_HP_PER_RANK * totalStat(STAT_CON);
+  player.maxHp =
+    100 + CON_HP_PER_RANK * totalStat(STAT_CON) + START_HP_PER_RANK * shopRanks[SHOP_START_HP];
   player.hp = player.maxHp;
   player.frozen = 0;
   player.shield = 0;
+  player.lives = shopRanks[SHOP_REVIVE];
+  player.iframes = 0;
   lastDiagX = 1;
   lastDiagY = 0;
   diagGrace = -1;
 }
 
 export function updatePlayer(dt: number): void {
+  if (player.iframes > 0) {
+    player.iframes = Math.max(0, player.iframes - dt);
+  }
   if (player.frozen > 0) {
     player.frozen = Math.max(0, player.frozen - dt);
     player.moving = false;

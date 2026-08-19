@@ -1,14 +1,22 @@
-import { resetCombat } from './combat';
+import { primeFinalePowers, resetCombat } from './combat';
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
-import { killOnScreenRegulars, resetEnemies, takeSlainMiniboss, unlockNextTier } from './enemies';
+import {
+  killOnScreenRegulars,
+  resetEnemies,
+  spawnFinalBoss,
+  takeSlainFinalBoss,
+  takeSlainMiniboss,
+  unlockNextTier,
+} from './enemies';
 import { resetExplosions, spawnExplosion } from './fx';
-import { pauseIconContains } from './hud';
+import { formatScrap, pauseIconContains } from './hud';
 import { mouse, wasPressed } from './input';
 import { bakeTiles, snapshotTiles } from './map';
 import { RAINBOW_COLORS, unlockedColors } from './palette';
-import { consumeLevelUp, resetPickups } from './pickups';
-import { generatePipes, takePipeSegment } from './pipes';
-import { player, resetPlayer } from './player';
+import { consumeLevelUp, resetPickups, scrap, spendScrap } from './pickups';
+import { generatePipes, spawnPlazaPortal, takePipeSegment } from './pipes';
+import { player, resetPlayer, tryRevive } from './player';
+import { loadSave, saveGame } from './save';
 import { rebakeAllSprites } from './sprites';
 import {
   applyPick,
@@ -22,7 +30,12 @@ import {
   POWER_TITLE,
   POWER_UNLOCK_BODY,
   resetRunStats,
+  SHOP_RANK_CAP,
+  SHOP_ROWS,
   STAT_CON,
+  shopLine,
+  shopPrice,
+  shopRanks,
 } from './stats';
 import { closeUi, drawUi, isUiOpen, openCards, openMenu, updateUi } from './ui';
 
@@ -39,6 +52,7 @@ const WAVE_SPEED = 0.38;
 let pauseOpen = false;
 let hand: DraftCard[] = [];
 let seq: { phase: number; color: number; x: number; y: number; wait: number } | null = null;
+let finaleStarted = false;
 
 export const colorWave = { active: false, x: 0, y: 0, r: 0 };
 
@@ -60,7 +74,19 @@ export function isSequenceActive(): boolean {
 function openTitle(): void {
   pauseOpen = false;
   scene = SCENE_TITLE;
-  openMenu('STOLEN RAINBOWS', ['START'], () => startRun(), 2, true);
+  openMenu(
+    'STOLEN RAINBOWS',
+    ['START', 'UPGRADES'],
+    (index) => {
+      if (index === 0) {
+        startRun();
+      } else {
+        openShop(true);
+      }
+    },
+    2,
+    true
+  );
 }
 
 function startRun(): void {
@@ -73,8 +99,51 @@ function startRun(): void {
 function quitToTitle(): void {
   closeUi();
   overlayQueue.length = 0;
+  saveGame();
   resetRun();
   openTitle();
+}
+
+function openDeath(): void {
+  saveGame();
+  openMenu('YOU DIED', ['CONTINUE'], () => openShop(false));
+}
+
+function openWin(): void {
+  saveGame();
+  openMenu('YOU WIN', ['CONTINUE'], () => openShop(false));
+}
+
+function openShop(fromTitle: boolean): void {
+  const items: string[] = [];
+  for (let i = 0; i < SHOP_ROWS; i++) {
+    items.push(shopLine(i));
+  }
+  items.push('DONE');
+  openMenu(
+    'SHOP',
+    items,
+    (index) => {
+      if (index >= SHOP_ROWS) {
+        closeUi();
+        saveGame();
+        if (fromTitle) {
+          openTitle();
+        } else {
+          startRun();
+        }
+        return;
+      }
+      if (shopRanks[index] < SHOP_RANK_CAP && spendScrap(shopPrice(index))) {
+        shopRanks[index]++;
+        saveGame();
+        openShop(fromTitle);
+      }
+    },
+    1,
+    false,
+    'SCRAP ' + formatScrap(scrap)
+  );
 }
 
 function openPause(): void {
@@ -145,7 +214,31 @@ function pumpOverlays(): void {
   }
   if (consumeLevelUp()) {
     openLevelUp();
+    return;
   }
+  if (!seq && !finaleStarted && allColorsUnlocked()) {
+    beginFinale();
+  }
+}
+
+function allColorsUnlocked(): boolean {
+  for (let i = 0; i < 7; i++) {
+    if (!unlockedColors[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Plaza portal + Business Boss. Safe to call once per run. */
+export function beginFinale(): void {
+  if (finaleStarted || scene !== SCENE_RUN) {
+    return;
+  }
+  finaleStarted = true;
+  const home = spawnPlazaPortal();
+  spawnFinalBoss(home.x, home.y);
+  primeFinalePowers();
 }
 
 function wantsPause(): boolean {
@@ -157,11 +250,13 @@ function wantsPause(): boolean {
 }
 
 export function initOverlays(): void {
+  loadSave();
   openTitle();
 }
 
 export function resetRun(): void {
   seq = null;
+  finaleStarted = false;
   colorWave.active = false;
   resetRunStats();
   resetPlayer();
@@ -250,6 +345,14 @@ export function updateOverlays(viewWidth: number, viewHeight: number): void {
   }
   if (isUiOpen()) {
     updateUi(viewWidth, viewHeight);
+  }
+  if (takeSlainFinalBoss()) {
+    enqueueOverlay(openWin);
+  }
+  if (scene === SCENE_RUN && !isUiOpen() && !seq && player.hp <= 0 && overlayQueue.length === 0) {
+    if (!tryRevive()) {
+      openDeath();
+    }
   }
   pumpOverlays();
 }

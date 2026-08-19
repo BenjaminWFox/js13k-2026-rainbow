@@ -163,7 +163,9 @@ function render(): void {
 
   const playerScreenX = Math.floor(player.x - cameraX);
   const playerScreenY = Math.floor(player.y - cameraY);
-  ctx.drawImage(playerSprite, playerScreenX, playerScreenY);
+  if (player.iframes <= 0 || ((player.iframes / 80) | 0) % 2 === 0) {
+    ctx.drawImage(playerSprite, playerScreenX, playerScreenY);
+  }
   drawCombat(ctx, cameraX, cameraY);
   drawExplosions(ctx, cameraX, cameraY, viewWidth, viewHeight);
 

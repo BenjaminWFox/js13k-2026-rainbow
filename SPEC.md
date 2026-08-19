@@ -679,18 +679,18 @@ projectiles + freeze, minibosses + pipe destruction + color wave.
 | 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere | ✅ |
 | 5 | **Powers:** all 7 color powers, projectiles, freeze/slow, WIS scaling, stack rule | Flagship | Seven abilities sharing targeting/cooldown/freeze machinery; minibosses reuse these | ✅ |
 | 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | ✅ |
-| 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework | |
-| 8 | **Final boss + finale:** plaza portal, all-powers boss, map-wide pursuit, win state | Capable | Reuses phase-5 powers and phase-6 patterns; numbers are specified | |
+| 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework | ✅ |
+| 8 | **Final boss + finale:** plaza portal, all-powers boss, map-wide pursuit, win state | Capable | Reuses phase-5 powers and phase-6 patterns; numbers are specified | ✅ |
 | 9 | **Opening cutscene + dialogue UI:** panel component, scripted choreography, skip | Flagship | Scripted movement + sequenced pipe/color drain under tight bytes; first candidate on the fallback ladder, so cost judgment matters | |
 | 10 | **Tuning + stretch + ship:** balance numbers (the §5 TBDs), surge spawns, difficulty modes, audio, final golfing | Flagship | Playtest judgment and byte-tradeoff calls per Rule 5 | |
 
 Notes:
 
-- Phase 7 is next. Death/win overlays, revives, localStorage, scrap shop, and
-  the title Upgrades button still need the phase-4 card/menu widget. Miniboss
-  death already grants the color power and queues the unlock card before any
-  pending level-up. Debug keys 1–7 still toggle palette + powers without
-  killing the matching miniboss. Placeholder combat numbers follow the
-  starting-kit style until the tuning phase.
+- Phase 9 is next. Opening cutscene + dialogue UI still skipped: Start
+  jumps straight into the greyscale run. Shop prices, Start HP / Start
+  Speed amounts, revive HP/i-frames, and other combat numbers remain
+  placeholders until the tuning phase. Debug: 1–7 toggle palette +
+  powers without killing minibosses; F unlocks all colors and starts
+  the finale; C grants scrap; K sets HP to 0.
 - Audio (phase 10) stays deferred per §2; drop stretch items before shop rows per the
   §1 fallback ladder.

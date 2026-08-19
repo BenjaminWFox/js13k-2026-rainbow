@@ -22,7 +22,7 @@ export function bakeHud(): void {
   levelPrefix = bakeText('LEVEL');
 }
 
-function formatScrap(n: number): string {
+export function formatScrap(n: number): string {
   let s = String(n | 0);
   let out = '';
   while (s.length > 3) {

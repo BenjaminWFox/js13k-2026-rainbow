@@ -13,6 +13,7 @@ interface Rect {
 
 let layout = LAYOUT_LIST;
 let heading: HTMLCanvasElement | null = null;
+let subheading: HTMLCanvasElement | null = null;
 let headingTop = false;
 let labels: HTMLCanvasElement[] = [];
 let bodies: HTMLCanvasElement[] = [];
@@ -21,6 +22,8 @@ let onPick: ((index: number) => void) | null = null;
 const rects: Rect[] = [];
 let headingX = 0;
 let headingY = 0;
+let subX = 0;
+let subY = 0;
 
 export function isUiOpen(): boolean {
   return onPick !== null;
@@ -29,6 +32,7 @@ export function isUiOpen(): boolean {
 export function closeUi(): void {
   onPick = null;
   heading = null;
+  subheading = null;
   labels = [];
   bodies = [];
   rects.length = 0;
@@ -39,10 +43,12 @@ export function openMenu(
   items: string[],
   pick: (index: number) => void,
   titleScale = 1,
-  titleAtTop = false
+  titleAtTop = false,
+  subtitle?: string
 ): void {
   layout = LAYOUT_LIST;
   heading = title ? bakeText(title, '#fff', titleScale) : null;
+  subheading = subtitle ? bakeText(subtitle) : null;
   headingTop = titleAtTop;
   labels = items.map((item) => bakeText(item));
   bodies = [];
@@ -58,6 +64,7 @@ export function openCards(
 ): void {
   layout = LAYOUT_CARDS;
   heading = title ? bakeText(title, titleColor) : null;
+  subheading = null;
   headingTop = false;
   labels = items.map((item) => bakeText(item.title));
   bodies = items.map((item) => bakeText(item.body));
@@ -73,6 +80,8 @@ function layoutUi(viewWidth: number, viewHeight: number): void {
   rects.length = 0;
   headingX = 0;
   headingY = 0;
+  subX = 0;
+  subY = 0;
   const n = labels.length;
   if (n === 0) {
     return;
@@ -92,16 +101,25 @@ function layoutUi(viewWidth: number, viewHeight: number): void {
     const boxW = inner + padX * 2 + 2;
     const blockH = n * boxH + (n - 1) * gap;
     const x = (viewWidth - boxW) >> 1;
+    const subH = subheading ? subheading.height + 4 : 0;
     let y: number;
     if (heading) {
       headingX = (viewWidth - heading.width) >> 1;
       if (headingTop) {
         headingY = 16;
+        if (subheading) {
+          subX = (viewWidth - subheading.width) >> 1;
+          subY = headingY + heading.height + 4;
+        }
         y = (viewHeight - blockH) >> 1;
       } else {
-        const total = heading.height + 8 + blockH;
+        const total = heading.height + 8 + subH + blockH;
         headingY = (viewHeight - total) >> 1;
-        y = headingY + heading.height + 8;
+        if (subheading) {
+          subX = (viewWidth - subheading.width) >> 1;
+          subY = headingY + heading.height + 4;
+        }
+        y = headingY + heading.height + 8 + subH;
       }
     } else {
       y = (viewHeight - blockH) >> 1;
@@ -182,6 +200,9 @@ export function drawUi(ctx: CanvasRenderingContext2D, viewWidth: number, viewHei
 
   if (heading) {
     ctx.drawImage(heading, headingX, headingY);
+  }
+  if (subheading) {
+    ctx.drawImage(subheading, subX, subY);
   }
 
   for (let i = 0; i < rects.length; i++) {

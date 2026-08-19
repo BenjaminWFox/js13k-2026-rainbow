@@ -721,6 +721,21 @@ export function generatePipes(seed: number): void {
   }
 }
 
+/**
+ * Open the plaza portal on the right rim of the hub, facing west into the
+ * plaza. Returns the boss stand position just inside the plaza.
+ */
+export function spawnPlazaPortal(): { x: number; y: number } {
+  const hub = hubRadiusTiles(0) * TILE_SIZE;
+  const portalX = CENTER_X + hub - PORTAL_W * 0.4;
+  const portalY = CENTER_Y - PORTAL_H / 2;
+  pushPortal(portalX, portalY, false);
+  return {
+    x: portalX - PLAYER_WIDTH - 4,
+    y: portalY + PORTAL_H - PLAYER_HEIGHT,
+  };
+}
+
 /** Pull the next portal-end segment off a pipe. Returns null when empty. */
 export function takePipeSegment(color: number): PipePiece | null {
   const run = pipeRuns[color];

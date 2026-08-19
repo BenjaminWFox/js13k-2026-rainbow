@@ -30,6 +30,20 @@ export const COLOR_POWERS = [
 ];
 
 export const STAT_CAP = 5;
+export const SHOP_RANK_CAP = 3;
+
+export const SHOP_LUCK = 0;
+export const SHOP_STR = 1;
+export const SHOP_DEX = 2;
+export const SHOP_CON = 3;
+export const SHOP_WIS = 4;
+export const SHOP_START_HP = 5;
+export const SHOP_START_SPD = 6;
+export const SHOP_MAGNET = 7;
+export const SHOP_XP = 8;
+export const SHOP_SCRAP = 9;
+export const SHOP_REVIVE = 10;
+export const SHOP_ROWS = 11;
 
 // Per-rank amounts are TBD; placeholders until the tuning phase.
 export const STR_PER_RANK = 0.2;
@@ -39,6 +53,8 @@ export const POWER_DMG_PER_EVEN = 0.25;
 export const POWER_CD_PER_ODD = 0.15;
 /** Yellow speed: every rank raises move speed (no cooldown). */
 export const SPEED_PER_RANK = 0.15;
+export const START_HP_PER_RANK = 15;
+export const START_SPD_PER_RANK = 0.1;
 
 const STAT_TITLE = ['STR', 'DEX', 'CON', 'WIS'];
 const STAT_BODY = ['KIT DMG', 'LESS HITS', 'MAX HP', 'COLOR DMG'];
@@ -67,11 +83,26 @@ export const POWER_UNLOCK_BODY = [
 const LUCK_FOURTH = [0, 0.25, 0.5, 0.75];
 const LUCK_FIFTH = [0, 0.2, 0.4, 0.6];
 
-/** In-run ranks. Shop ranks stack on top and are filled in the meta phase. */
+/** In-run ranks. Shop ranks stack on top (max 3) toward the 5-rank stat cap. */
 export const inRunStats = [0, 0, 0, 0];
-export const shopStats = [0, 0, 0, 0];
-/** Shop luck 0–3. Extra draft cards are chanced, not guaranteed. */
-export const shopLuck = 0;
+/** Luck, STR, DEX, CON, WIS, Start HP, Start Speed, Magnet, XP, Scrap, Revive. */
+export const shopRanks = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+const SHOP_NAME = [
+  'LUCK',
+  'STR',
+  'DEX',
+  'CON',
+  'WIS',
+  'START HP',
+  'START SPD',
+  'MAGNET',
+  'XP GAIN',
+  'SCRAP GAIN',
+  'REVIVE',
+];
+/** Base cost; actual price is this times next rank. Placeholders until tuning. */
+const SHOP_COST = [12, 10, 10, 10, 10, 12, 12, 10, 15, 15, 25];
 
 /** Rank 0 = not owned. Horn and stomp start at 1. */
 export const powerRanks = [1, 1, 0, 0, 0, 0, 0, 0, 0];
@@ -84,7 +115,19 @@ export interface DraftCard {
 }
 
 export function totalStat(id: number): number {
-  return Math.min(STAT_CAP, inRunStats[id] + shopStats[id]);
+  return Math.min(STAT_CAP, inRunStats[id] + shopRanks[SHOP_STR + id]);
+}
+
+export function shopPrice(row: number): number {
+  return SHOP_COST[row] * (shopRanks[row] + 1);
+}
+
+export function shopLine(row: number): string {
+  const rank = shopRanks[row];
+  if (rank >= SHOP_RANK_CAP) {
+    return SHOP_NAME[row] + '  MAX';
+  }
+  return SHOP_NAME[row] + '  ' + rank + '/3  ' + shopPrice(row);
 }
 
 /** Even-rank damage/amount bonus (heal absorb, shield, color+kit dmg). */
@@ -106,9 +149,11 @@ export function powerCooldown(base: number, powerId: number): number {
   return base * (1 - POWER_CD_PER_ODD * cdRanks);
 }
 
-/** Rank 0 = 1×; each owned yellow rank adds SPEED_PER_RANK. */
+/** Rank 0 = 1×; yellow ranks and shop Start Speed stack. */
 export function speedMul(): number {
-  return 1 + SPEED_PER_RANK * powerRanks[POWER_SPEED];
+  return (
+    1 + SPEED_PER_RANK * powerRanks[POWER_SPEED] + START_SPD_PER_RANK * shopRanks[SHOP_START_SPD]
+  );
 }
 
 export function grantPower(id: number): void {
@@ -179,7 +224,7 @@ export function dealLevelUpCards(): DraftCard[] {
   }
 
   let count = 3;
-  const luck = Math.min(3, shopLuck);
+  const luck = Math.min(SHOP_RANK_CAP, shopRanks[SHOP_LUCK]);
   if (Math.random() < LUCK_FOURTH[luck]) {
     count++;
     if (Math.random() < LUCK_FIFTH[luck]) {

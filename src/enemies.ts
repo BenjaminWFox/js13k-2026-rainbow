@@ -1,4 +1,11 @@
-import { MAP_HEIGHT, MAP_WIDTH, PLAYER_HEIGHT, PLAYER_HIT, TILE_SIZE } from './constants';
+import {
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  PLAYER_HEIGHT,
+  PLAYER_HIT,
+  PLAYER_SPEED,
+  TILE_SIZE,
+} from './constants';
 import { spawnExplosion } from './fx';
 import { getTile, TILE_WALL } from './map';
 import { RAINBOW_COLORS } from './palette';
@@ -26,6 +33,9 @@ const CONTACT_TICK_MS = 500;
 const ENEMY_SPEED = 0.03;
 const MINI_SPEED = 0.04;
 const MINI_SPEED_YELLOW = 0.06;
+const FINAL_HP = 200;
+/** `color` on the final boss; minibosses use 0–6, regulars use -1. */
+export const FINAL_BOSS = -2;
 const CHASE_IN = 75;
 const CHASE_OUT = 250;
 const RESET_RANGE = 500;
@@ -89,6 +99,7 @@ export const enemies: Enemy[] = [];
 let unlockedTiers = 1;
 
 const minibossSprites: HTMLCanvasElement[] = [];
+let finalBossSprite: HTMLCanvasElement | undefined;
 
 const miniHit = {
   hitX: 0,
@@ -101,10 +112,17 @@ const miniHit = {
 
 /** Set when a miniboss dies; consumed the same frame to start the death sequence. */
 let slainMiniboss: { color: number; x: number; y: number } | null = null;
+let slainFinalBoss = false;
 
 export function takeSlainMiniboss(): { color: number; x: number; y: number } | null {
   const slain = slainMiniboss;
   slainMiniboss = null;
+  return slain;
+}
+
+export function takeSlainFinalBoss(): boolean {
+  const slain = slainFinalBoss;
+  slainFinalBoss = false;
   return slain;
 }
 
@@ -116,7 +134,7 @@ function hitOf(enemy: Enemy): {
   radius: number;
   contactDamage: number;
 } {
-  return enemy.color >= 0 ? miniHit : enemyTypes[enemy.type];
+  return enemy.boss ? miniHit : enemyTypes[enemy.type];
 }
 
 function tintEyes(canvas: HTMLCanvasElement, rgb: number): void {
@@ -154,6 +172,9 @@ export function bakeEnemyTypes(): void {
     }
     afterRebake(retintBossEyes);
   }
+  if (!finalBossSprite) {
+    finalBossSprite = createSprite(22, 0, 11, 19);
+  }
   retintBossEyes();
 }
 
@@ -165,6 +186,7 @@ export function resetEnemies(): void {
   spawnTimer = 0;
   unlockedTiers = 1;
   slainMiniboss = null;
+  slainFinalBoss = false;
   spawnMinibosses();
 }
 
@@ -194,6 +216,29 @@ function spawnMinibosses(): void {
   }
 }
 
+export function spawnFinalBoss(x: number, y: number): void {
+  enemies.push({
+    x,
+    y,
+    type: 0,
+    hp: FINAL_HP,
+    kbX: 0,
+    kbY: 0,
+    bobTime: 0,
+    contactTimer: 0,
+    frozen: 0,
+    slowed: 0,
+    boss: true,
+    color: FINAL_BOSS,
+    maxHp: FINAL_HP,
+    homeX: x,
+    homeY: y,
+    cd: 0,
+    shield: 0,
+    chasing: true,
+  });
+}
+
 export function updateEnemies(dt: number, viewWidth: number, viewHeight: number): void {
   const spawnRadius = Math.hypot(viewWidth, viewHeight) / 2 + SPAWN_MARGIN;
   lastSpawnRadius = spawnRadius;
@@ -215,7 +260,7 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
     const isMini = enemy.color >= 0;
     if (enemy.frozen > 0) {
       enemy.frozen = Math.max(0, enemy.frozen - dt);
-    } else if (!isMini) {
+    } else if (!enemy.boss) {
       enemy.bobTime += dt;
     }
     if (enemy.slowed > 0) {
@@ -229,7 +274,7 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
     const towardY = playerCenterY - centerY;
     const dist = Math.hypot(towardX, towardY);
 
-    if (!isMini && dist > teleportRadius) {
+    if (!enemy.boss && dist > teleportRadius) {
       // Too far: teleport back to the spawn ring — unless we're near the cap,
       // in which case despawn in favor of fresh spawns.
       if (enemies.length >= ENEMY_CAP - 5) {
@@ -263,6 +308,8 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
       } else if (dist < CHASE_IN) {
         enemy.chasing = true;
       }
+    } else if (enemy.boss) {
+      enemy.chasing = true;
     }
 
     // Knockback from stomp, decaying independently of the chase
@@ -288,7 +335,9 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
     let moveY = towardY;
     let moveDist = dist;
     let speed = ENEMY_SPEED;
-    if (isMini) {
+    if (enemy.color === FINAL_BOSS) {
+      speed = PLAYER_SPEED;
+    } else if (isMini) {
       speed = enemy.color === 2 ? MINI_SPEED_YELLOW : MINI_SPEED;
       if (!enemy.chasing) {
         moveX = enemy.homeX - enemy.x;
@@ -499,7 +548,7 @@ export function drawEnemies(
 ): void {
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   for (const enemy of enemies) {
-    if (enemy.color >= 0) {
+    if (enemy.boss) {
       continue;
     }
     const type = hitOf(enemy);
@@ -535,10 +584,13 @@ export function drawEnemies(
     }
   }
   for (const enemy of enemies) {
-    if (enemy.color < 0) {
+    if (!enemy.boss) {
       continue;
     }
-    const canvas = minibossSprites[enemy.color];
+    const canvas =
+      enemy.color === FINAL_BOSS
+        ? (finalBossSprite as HTMLCanvasElement)
+        : minibossSprites[enemy.color];
     const screenX = Math.floor(enemy.x - cameraX);
     const screenY = Math.floor(enemy.y - cameraY);
     if (
@@ -626,6 +678,14 @@ export function hurtEnemyAt(index: number, amount: number): boolean {
   if (enemy.hp > 0) {
     return false;
   }
+  if (enemy.color === FINAL_BOSS) {
+    spawnExplosion(cx, cy, 0x000000, 22);
+    spawnExplosion(cx, cy, 0xffffff, 14);
+    dropBossLoot(cx, cy);
+    slainFinalBoss = true;
+    enemies.splice(index, 1);
+    return true;
+  }
   if (enemy.color >= 0) {
     spawnExplosion(cx, cy, RAINBOW_COLORS[enemy.color], 18);
     dropBossLoot(cx, cy);
@@ -654,7 +714,7 @@ export function killOnScreenRegulars(
   viewH: number
 ): void {
   for (let i = enemies.length - 1; i >= 0; i--) {
-    if (enemies[i].color >= 0) {
+    if (enemies[i].boss) {
       continue;
     }
     const box = enemyHitbox(enemies[i]);

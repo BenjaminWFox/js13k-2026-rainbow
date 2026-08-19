@@ -1,6 +1,7 @@
 import { PLAYER_SPEED, PLAYER_WIDTH } from './constants';
 import { getPlayerHitbox } from './player';
 import { createSprite } from './sprites';
+import { SHOP_MAGNET, SHOP_SCRAP, SHOP_XP, shopRanks } from './stats';
 
 export const PICKUP_CRYSTAL = 0;
 export const PICKUP_SCRAP = 1;
@@ -30,7 +31,7 @@ export const pickups: Pickup[] = [];
 export let xp = 0;
 /** Starts at 1; increments when the bar fills (one queued overlay per wrap). */
 export let level = 1;
-/** Magneted scrap this session; persistence lands with the shop. */
+/** Magneted scrap this session; persisted with shop ranks in localStorage. */
 export let scrap = 0;
 /** Level-ups waiting for the overlay queue. */
 export let pendingLevelUps = 0;
@@ -58,6 +59,18 @@ export function consumeLevelUp(): boolean {
     return false;
   }
   pendingLevelUps--;
+  return true;
+}
+
+export function setScrap(n: number): void {
+  scrap = Math.max(0, n | 0);
+}
+
+export function spendScrap(amount: number): boolean {
+  if (scrap < amount) {
+    return false;
+  }
+  scrap -= amount;
   return true;
 }
 
@@ -91,7 +104,7 @@ export function dropBossLoot(x: number, y: number): void {
 
 /** Independent crystal/scrap rolls at a world point (usually an enemy center). */
 export function dropLoot(x: number, y: number): void {
-  if (Math.random() < CRYSTAL_CHANCE) {
+  if (Math.random() < CRYSTAL_CHANCE * (1 + shopRanks[SHOP_XP] / 3)) {
     pickups.push({
       x: x - CRYSTAL_W / 2 + (Math.random() - 0.5) * 4,
       y: y - CRYSTAL_H / 2 + (Math.random() - 0.5) * 4,
@@ -99,7 +112,7 @@ export function dropLoot(x: number, y: number): void {
       delay: MAGNET_DELAY_MS,
     });
   }
-  if (Math.random() < SCRAP_CHANCE) {
+  if (Math.random() < SCRAP_CHANCE * (1 + shopRanks[SHOP_SCRAP] / 3)) {
     pickups.push({
       x: x - SCRAP_W / 2 + (Math.random() - 0.5) * 4,
       y: y - SCRAP_H / 2 + (Math.random() - 0.5) * 4,
@@ -114,6 +127,7 @@ export function updatePickups(dt: number): void {
   const cx = hit.x + hit.w / 2;
   const cy = hit.y + hit.h / 2;
   const pull = PULL_SPEED * dt;
+  const magnet = MAGNET_RADIUS * (1 + 0.25 * shopRanks[SHOP_MAGNET]);
 
   for (let i = pickups.length - 1; i >= 0; i--) {
     const p = pickups[i];
@@ -129,7 +143,7 @@ export function updatePickups(dt: number): void {
     const dy = cy - pcy;
     const dist = Math.hypot(dx, dy);
 
-    if (dist < MAGNET_RADIUS && dist > 0.01) {
+    if (dist < magnet && dist > 0.01) {
       const step = Math.min(pull, dist);
       p.x += (dx / dist) * step;
       p.y += (dy / dist) * step;

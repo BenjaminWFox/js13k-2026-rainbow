@@ -3,6 +3,7 @@ import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
 import { enemies, enemyHitbox, spawnBurst } from './enemies';
 import { wasPressed } from './input';
 import { bakeTiles, getTile, getTileSolid, TILE_WALL } from './map';
+import { beginFinale, SCENE_RUN, scene } from './overlays';
 import { unlockedColors } from './palette';
 import {
   addXp,
@@ -13,6 +14,7 @@ import {
   SCRAP_H,
   SCRAP_W,
   scrap,
+  setScrap,
   xp,
 } from './pickups';
 import { pipePieces } from './pipes';
@@ -99,7 +101,8 @@ export function initDebugProps(): void {
 /**
  * Keys 1-7 toggle rainbow unlocks and grant/revoke that color's power;
  * 8 toggles hitbox outlines; 9 burst-spawns 50 enemies; 0 restores full HP;
- * X grants 5 XP. Dev-only.
+ * X grants 5 XP; C grants 50 scrap; K sets HP to 0; F starts the finale.
+ * Dev-only.
  */
 export function handleDebugKeys(): void {
   for (let i = 0; i < 7; i++) {
@@ -125,6 +128,21 @@ export function handleDebugKeys(): void {
   }
   if (wasPressed('KeyX')) {
     addXp(5);
+  }
+  if (wasPressed('KeyC')) {
+    setScrap(scrap + 50);
+  }
+  if (wasPressed('KeyK')) {
+    player.hp = 0;
+  }
+  if (wasPressed('KeyF') && scene === SCENE_RUN) {
+    for (let i = 0; i < 7; i++) {
+      unlockedColors[i] = true;
+      grantPower(COLOR_POWERS[i]);
+    }
+    rebakeAllSprites();
+    bakeTiles();
+    beginFinale();
   }
 }
 
@@ -246,10 +264,12 @@ export function drawDebugOverlay(
   ctx.fillStyle = '#fff';
   ctx.font = '5px monospace';
   ctx.fillText(
-    'wasd/arrows: move / 1-7: colors+powers / 8: hitboxes / 9: +50 / 0: heal / x: +xp   enemies: ' +
+    'wasd/arrows: move / 1-7: colors+powers / 8: hitboxes / 9: +50 / 0: heal / x: +xp / c: +scrap / k: kill / f: finale   enemies: ' +
       enemies.length +
       ' hp: ' +
       player.hp +
+      ' lives: ' +
+      player.lives +
       ' xp: ' +
       xp +
       ' lv: ' +
