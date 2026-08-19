@@ -635,8 +635,8 @@ the rainbow colors.
 ## 5. Open Questions / TBD
 
 - Player facing **art** (behavior is decided: last-move facing, initial right). Walk
-  animation is decided (§3 leg-cut bake) — only its frame cadence and exact cut
-  coordinates need visual tuning.
+  animation is **implemented** (§3 leg-cut bake, 150ms cadence, spec cut coordinates —
+  they match the art exactly); only visual tuning of the cadence remains if desired.
 - XP curve (crystals per level) and inherent crystal/scrap drop chances per enemy type.
 - Combat numbers: horn/stomp/fireball/flame-nova cooldowns and damage, stomp knock-back,
   heal amount, shield absorb, yellow speed per stack, per-rank power amounts.
@@ -694,9 +694,9 @@ Notes:
   advances a panel; during choreography it skips to the greyscale run
   start. Dialogue panel = framed speaker sprite + word-wrapped packed-font
   lines.
-- **Size:** 13,460 B zipped — 148 B over the cap (phase 9 cost 985 B, inside
-  its §1 budget; audio still unreserved). Phase 10 must golf and spend from
-  the §1 fallback ladder.
+- **Size:** 13,628 B zipped — 316 B over the cap (phase 9 cost 985 B, inside
+  its §1 budget; the §3 leg-cut walk animation cost 168 B; audio still
+  unreserved). Phase 10 must golf and spend from the §1 fallback ladder.
 - Shop prices, Start HP / Start Speed amounts, revive HP/i-frames, and
   other combat numbers remain placeholders until the tuning phase.
   Debug: 1–7 toggle palette + powers without killing minibosses; F

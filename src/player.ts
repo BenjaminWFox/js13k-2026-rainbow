@@ -30,6 +30,8 @@ export const player = {
   faceX: 1,
   faceY: 0,
   moving: false,
+  /** Walk-cycle clock (ms); advances only while moving, resets when idle. */
+  walkTime: 0,
   // Baseline 100 HP; CON and shop Start HP raise the max
   hp: 100,
   maxHp: 100,
@@ -108,6 +110,7 @@ export function resetPlayer(): void {
   player.faceX = 1;
   player.faceY = 0;
   player.moving = false;
+  player.walkTime = 0;
   player.maxHp =
     100 + CON_HP_PER_RANK * totalStat(STAT_CON) + START_HP_PER_RANK * shopRanks[SHOP_START_HP];
   player.hp = player.maxHp;
@@ -146,6 +149,7 @@ export function updatePlayer(dt: number): void {
   }
 
   player.moving = dx !== 0 || dy !== 0;
+  player.walkTime = player.moving ? player.walkTime + dt : 0;
   if (!player.moving) {
     if (diagGrace >= 0 && diagGrace <= DIAGONAL_RELEASE_MS) {
       player.faceX = lastDiagX;

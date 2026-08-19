@@ -5,6 +5,7 @@ import {
   PLAYER_HIT,
   PLAYER_SPEED,
   TILE_SIZE,
+  WALK_FRAME_MS,
 } from './constants';
 import { spawnExplosion } from './fx';
 import { getTile, TILE_WALL } from './map';
@@ -12,7 +13,7 @@ import { RAINBOW_COLORS } from './palette';
 import { dropBossLoot, dropLoot } from './pickups';
 import { pipeHomes, pipePieces } from './pipes';
 import { damagePlayer, getPlayerHitbox } from './player';
-import { afterRebake, createSprite, measureContentBox } from './sprites';
+import { afterRebake, createSprite, createWalkSprites, measureContentBox } from './sprites';
 
 /**
  * Difficulty ladder (easiest → hardest) mapped to sheet cell index within the
@@ -91,6 +92,8 @@ export interface Enemy {
   cd: number;
   shield: number;
   chasing: boolean;
+  /** Bosses only: walked this frame — drives the leg-cut walk cycle. */
+  moving: boolean;
 }
 
 export const enemies: Enemy[] = [];
@@ -98,9 +101,12 @@ export const enemies: Enemy[] = [];
 // Tiers allowed to spawn; each destroyed pipe unlocks the next type
 let unlockedTiers = 1;
 
-/** Shared Business Man bakes, eyes tinted per color — also cutscene actors. */
-export const minibossSprites: HTMLCanvasElement[] = [];
-export let finalBossSprite: HTMLCanvasElement | undefined;
+/**
+ * Shared Business Man bakes, eyes tinted per color — also cutscene actors.
+ * Each entry is [idle, left leg-cut, right leg-cut] (§3 Animation).
+ */
+export const minibossSprites: HTMLCanvasElement[][] = [];
+export let finalBossSprites: HTMLCanvasElement[] | undefined;
 
 const miniHit = {
   hitX: 0,
@@ -147,7 +153,9 @@ function tintEyes(canvas: HTMLCanvasElement, rgb: number): void {
 
 function retintBossEyes(): void {
   for (let i = 0; i < minibossSprites.length; i++) {
-    tintEyes(minibossSprites[i], RAINBOW_COLORS[i]);
+    for (const frame of minibossSprites[i]) {
+      tintEyes(frame, RAINBOW_COLORS[i]);
+    }
   }
 }
 
@@ -169,12 +177,12 @@ export function bakeEnemyTypes(): void {
   }
   if (minibossSprites.length === 0) {
     for (let i = 0; i < 7; i++) {
-      minibossSprites.push(createSprite(11, 0, 11, 19));
+      minibossSprites.push(createWalkSprites(11, 0, 11, 19));
     }
     afterRebake(retintBossEyes);
   }
-  if (!finalBossSprite) {
-    finalBossSprite = createSprite(22, 0, 11, 19);
+  if (!finalBossSprites) {
+    finalBossSprites = createWalkSprites(22, 0, 11, 19);
   }
   retintBossEyes();
 }
@@ -213,6 +221,7 @@ function spawnMinibosses(): void {
       cd: 0,
       shield: 0,
       chasing: false,
+      moving: false,
     });
   }
 }
@@ -237,6 +246,7 @@ export function spawnFinalBoss(x: number, y: number): void {
     cd: 0,
     shield: 0,
     chasing: true,
+    moving: false,
   });
 }
 
@@ -348,6 +358,8 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
     }
 
     // Chase: straight toward the player; walls block, pipes don't
+    const preX = enemy.x;
+    const preY = enemy.y;
     if (moveDist > 1 && enemy.frozen <= 0) {
       const step = speed * (enemy.slowed > 0 ? 0.5 : 1) * dt;
       const dx = (moveX / moveDist) * step;
@@ -357,6 +369,13 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
       }
       if (!hitsWall(enemy.x + type.hitX, enemy.y + type.hitY + dy, type.hitW, type.hitH)) {
         enemy.y += dy;
+      }
+    }
+    if (enemy.boss) {
+      // Bosses reuse bobTime as the walk-cycle clock (regulars use it to bob)
+      enemy.moving = enemy.x !== preX || enemy.y !== preY;
+      if (enemy.moving) {
+        enemy.bobTime += dt;
       }
     }
 
@@ -409,6 +428,7 @@ function trySpawn(playerCenterX: number, playerCenterY: number, radius: number):
       cd: 0,
       shield: 0,
       chasing: false,
+      moving: false,
     });
   }
 }
@@ -588,10 +608,12 @@ export function drawEnemies(
     if (!enemy.boss) {
       continue;
     }
-    const canvas =
+    const frames =
       enemy.color === FINAL_BOSS
-        ? (finalBossSprite as HTMLCanvasElement)
+        ? (finalBossSprites as HTMLCanvasElement[])
         : minibossSprites[enemy.color];
+    const canvas =
+      frames[enemy.moving ? 1 + (((enemy.bobTime / WALK_FRAME_MS) | 0) % 2) : 0];
     const screenX = Math.floor(enemy.x - cameraX);
     const screenY = Math.floor(enemy.y - cameraY);
     if (

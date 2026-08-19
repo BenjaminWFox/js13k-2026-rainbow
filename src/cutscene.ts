@@ -1,5 +1,5 @@
-import { PLAYER_HEIGHT, PLAYER_WIDTH } from './constants';
-import { finalBossSprite, minibossSprites } from './enemies';
+import { PLAYER_HEIGHT, PLAYER_WIDTH, WALK_FRAME_MS } from './constants';
+import { finalBossSprites, minibossSprites } from './enemies';
 import { bakeText, FONT_H, measureText } from './font';
 import { anyKeyPressed, mouse } from './input';
 import { bakeTiles } from './map';
@@ -59,7 +59,7 @@ let portalBack: PipePiece;
 let portalFront: PipePiece;
 let portalAlpha = 0;
 
-const boss = { x: 0, y: 0, shown: false };
+const boss = { x: 0, y: 0, shown: false, moving: false };
 let bossStandX = 0;
 let bossPortalX = 0;
 
@@ -114,6 +114,7 @@ export function startCutscene(done: () => void): void {
   boss.x = bossPortalX;
   boss.y = portalBack.y + portalBack.canvas.height - PLAYER_HEIGHT;
   boss.shown = false;
+  boss.moving = false;
 
   minis.length = 0;
   for (const home of pipeHomes) {
@@ -162,8 +163,10 @@ export function updateCutscene(dt: number): void {
     portalAlpha = Math.min(1, t / PORTAL_FADE_MS);
     if (t > PORTAL_FADE_MS) {
       boss.shown = true;
+      boss.moving = true;
       boss.x = Math.max(bossStandX, boss.x - BOSS_SPEED * dt);
       if (boss.x <= bossStandX) {
+        boss.moving = false;
         phase = PH_TALK;
         t = 0;
       }
@@ -200,6 +203,7 @@ export function updateCutscene(dt: number): void {
       mini.y += mini.dy * MINI_SPEED * dt;
     }
     if (boss.shown && t >= BOSS_EXIT_AT) {
+      boss.moving = true;
       boss.x += BOSS_SPEED * dt;
       if (boss.x >= bossPortalX) {
         boss.shown = false;
@@ -257,14 +261,24 @@ export function drawCutsceneWorld(
     );
     ctx.globalAlpha = 1;
   }
+  // Marching actors alternate the two leg-cut frames on the cutscene clock
+  const walkFrame = 1 + (((time / WALK_FRAME_MS) | 0) % 2);
   for (let i = 0; i < minis.length; i++) {
     const mini = minis[i];
     if (mini.launched) {
-      ctx.drawImage(minibossSprites[i], Math.floor(mini.x - cameraX), Math.floor(mini.y - cameraY));
+      ctx.drawImage(
+        minibossSprites[i][walkFrame],
+        Math.floor(mini.x - cameraX),
+        Math.floor(mini.y - cameraY)
+      );
     }
   }
-  if (boss.shown && finalBossSprite) {
-    ctx.drawImage(finalBossSprite, Math.floor(boss.x - cameraX), Math.floor(boss.y - cameraY));
+  if (boss.shown && finalBossSprites) {
+    ctx.drawImage(
+      finalBossSprites[boss.moving ? walkFrame : 0],
+      Math.floor(boss.x - cameraX),
+      Math.floor(boss.y - cameraY)
+    );
   }
   if (portalAlpha > 0) {
     ctx.globalAlpha = portalAlpha;
@@ -340,7 +354,7 @@ export function drawCutsceneUi(
   ctx.fillRect(fx, fy, frameW, frameH);
   ctx.fillStyle = '#000';
   ctx.fillRect(fx + 1, fy + 1, frameW - 2, frameH - 2);
-  const portrait = phase === PH_SHARD ? shardSprite : finalBossSprite;
+  const portrait = phase === PH_SHARD ? shardSprite : finalBossSprites?.[0];
   if (portrait) {
     ctx.drawImage(
       portrait,

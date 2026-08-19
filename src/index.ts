@@ -10,6 +10,7 @@ import {
   PLAYER_WIDTH,
   TARGET_VIEW_HEIGHT,
   TILE_SIZE,
+  WALK_FRAME_MS,
 } from './constants';
 import { drawCutsceneUi, drawCutsceneWorld, updateCutscene } from './cutscene';
 import { bakeEnemyTypes, drawEnemies, updateEnemies } from './enemies';
@@ -33,7 +34,7 @@ import {
 import { bakePickups, drawPickups, updatePickups } from './pickups';
 import { generatePipes, pipePieces, portalBacks, portalFronts } from './pipes';
 import { player, updatePlayer } from './player';
-import { createSprite, loadSpriteSheet } from './sprites';
+import { createWalkSprites, loadSpriteSheet } from './sprites';
 
 const canvas = document.querySelector('#c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -60,13 +61,15 @@ function resize(): void {
   ctx.imageSmoothingEnabled = false;
 }
 
-let playerSprite: HTMLCanvasElement;
+// [idle, left leg-cut, right leg-cut] — the cut frames alternate while moving
+let playerSprites: HTMLCanvasElement[];
 
 async function main(): Promise<void> {
   await loadSpriteSheet('sprites.png');
 
-  // Single 11x19 frame, drawn 1:1 with no facing flips (behavior TBD)
-  playerSprite = createSprite(PLAYER_SPRITE_X, PLAYER_SPRITE_Y, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
+  // Single 11x19 sheet frame, drawn 1:1 with no facing flips (facing art TBD);
+  // the two walk frames are derived at bake time (§3 leg-cut)
+  playerSprites = createWalkSprites(PLAYER_SPRITE_X, PLAYER_SPRITE_Y, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
   bakeEnemyTypes();
   bakePickups();
   bakeHud();
@@ -172,7 +175,8 @@ function render(): void {
   const playerScreenX = Math.floor(player.x - cameraX);
   const playerScreenY = Math.floor(player.y - cameraY);
   if (player.iframes <= 0 || ((player.iframes / 80) | 0) % 2 === 0) {
-    ctx.drawImage(playerSprite, playerScreenX, playerScreenY);
+    const frame = player.moving ? 1 + (((player.walkTime / WALK_FRAME_MS) | 0) % 2) : 0;
+    ctx.drawImage(playerSprites[frame], playerScreenX, playerScreenY);
   }
   drawCombat(ctx, cameraX, cameraY);
   drawExplosions(ctx, cameraX, cameraY, viewWidth, viewHeight);
