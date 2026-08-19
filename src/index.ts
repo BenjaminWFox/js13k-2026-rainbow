@@ -1,3 +1,4 @@
+import { drawCombat, updateCombat } from './combat';
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
@@ -11,8 +12,10 @@ import {
   TILE_SIZE,
 } from './constants';
 import { bakeEnemyTypes, drawEnemies, updateEnemies } from './enemies';
+import { drawExplosions, updateExplosions } from './fx';
 import { clearPressedKeys, initInput } from './input';
 import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
+import { bakePickups, drawPickups, updatePickups } from './pickups';
 import { generatePipes, pipePieces, portalBacks, portalFronts } from './pipes';
 import { player, updatePlayer } from './player';
 import { createSprite, loadSpriteSheet } from './sprites';
@@ -50,6 +53,7 @@ async function main(): Promise<void> {
   // Single 11x19 frame, drawn 1:1 with no facing flips (behavior TBD)
   playerSprite = createSprite(PLAYER_SPRITE_X, PLAYER_SPRITE_Y, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
   bakeEnemyTypes();
+  bakePickups();
 
   generateMap();
   bakeTiles();
@@ -75,7 +79,10 @@ function gameLoop(time: number): void {
     debug.handleDebugKeys();
   }
   updatePlayer(dt);
+  updateCombat(dt);
   updateEnemies(dt, viewWidth, viewHeight);
+  updatePickups(dt);
+  updateExplosions(dt);
   render();
   clearPressedKeys();
 }
@@ -111,6 +118,8 @@ function render(): void {
     }
   }
 
+  drawPickups(ctx, cameraX, cameraY, viewWidth, viewHeight);
+
   for (const piece of portalBacks) {
     ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
   }
@@ -128,6 +137,8 @@ function render(): void {
   const playerScreenX = Math.floor(player.x - cameraX);
   const playerScreenY = Math.floor(player.y - cameraY);
   ctx.drawImage(playerSprite, playerScreenX, playerScreenY);
+  drawCombat(ctx, cameraX, cameraY);
+  drawExplosions(ctx, cameraX, cameraY, viewWidth, viewHeight);
 
   // HP bar: white 1px inner bar in a 1px black outline, outline top 1px below
   // the sprite; inner width = % of HP

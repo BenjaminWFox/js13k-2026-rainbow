@@ -7,7 +7,7 @@ export const INDIGO = 5;
 export const VIOLET = 6;
 
 export const RAINBOW_COLORS = [
-  0xe40404, 0xff8200, 0xf1e300, 0x08ba00, 0x0030e2, 0x6e00ef, 0xa656ff,
+  0xe40404, 0xff8200, 0xf1e300, 0x08ba00, 0x0030e2, 0x6c00ef, 0xa656ff,
 ];
 
 // Which of the 7 rainbow colors have been released back into the world.
@@ -27,8 +27,10 @@ colorFamily.set(0xff8000, ORANGE);
 colorFamily.set(0xf1e500, YELLOW);
 colorFamily.set(0xf1e600, YELLOW);
 colorFamily.set(0xf1e400, YELLOW);
-colorFamily.set(0x6f00ef, INDIGO);
+colorFamily.set(0x6e00ef, INDIGO);
 colorFamily.set(0x6d00ef, INDIGO);
+colorFamily.set(0x6b00ef, INDIGO);
+colorFamily.set(0x6f00ef, INDIGO);
 
 /**
  * Desaturate a color to its locked grey using HSL lightness.

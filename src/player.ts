@@ -6,20 +6,18 @@ import {
   PLAYER_SPEED,
   TILE_SIZE,
 } from './constants';
+import { spawnExplosion } from './fx';
 import { isDown } from './input';
 import { getTileSolid } from './map';
 import { pipePieces } from './pipes';
-
-export const DIR_DOWN = 0;
-export const DIR_UP = 1;
-export const DIR_LEFT = 2;
-export const DIR_RIGHT = 3;
 
 export const player = {
   // Top-left corner of the player sprite, world-space pixels
   x: (MAP_WIDTH / 2) * TILE_SIZE,
   y: (MAP_HEIGHT / 2) * TILE_SIZE,
-  facing: DIR_DOWN,
+  // Last-move facing, diagonals included. Initial facing is right.
+  faceX: 1,
+  faceY: 0,
   moving: false,
   // Baseline 100 HP; CON / shop Start HP raise the max in later phases
   hp: 100,
@@ -28,34 +26,66 @@ export const player = {
 
 /** Death handling (revives, run-end overlay) lands with the run lifecycle phase. */
 export function damagePlayer(amount: number): void {
+  if (amount <= 0 || player.hp <= 0) {
+    return;
+  }
+  const hit = getPlayerHitbox();
+  const cx = hit.x + hit.w / 2;
+  const cy = hit.y + hit.h / 2;
+  spawnExplosion(cx, cy, 0x000000, 5);
+  spawnExplosion(cx, cy, 0xffffff, 5);
   player.hp = Math.max(0, player.hp - amount);
 }
+
+const DIAGONAL_RELEASE_MS = 100;
+
+let lastDiagX = 1;
+let lastDiagY = 0;
+/** -1 = no pending diagonal; 0 = currently diagonal; >0 = ms since leaving a diagonal. */
+let diagGrace = -1;
 
 export function updatePlayer(dt: number): void {
   let dx = 0;
   let dy = 0;
-  if (isDown('ArrowLeft')) {
+  if (isDown('ArrowLeft') || isDown('KeyA')) {
     dx -= 1;
   }
-  if (isDown('ArrowRight')) {
+  if (isDown('ArrowRight') || isDown('KeyD')) {
     dx += 1;
   }
-  if (isDown('ArrowUp')) {
+  if (isDown('ArrowUp') || isDown('KeyW')) {
     dy -= 1;
   }
-  if (isDown('ArrowDown')) {
+  if (isDown('ArrowDown') || isDown('KeyS')) {
     dy += 1;
   }
 
   player.moving = dx !== 0 || dy !== 0;
   if (!player.moving) {
+    if (diagGrace >= 0 && diagGrace <= DIAGONAL_RELEASE_MS) {
+      player.faceX = lastDiagX;
+      player.faceY = lastDiagY;
+    }
+    diagGrace = -1;
     return;
   }
 
-  if (dx !== 0) {
-    player.facing = dx < 0 ? DIR_LEFT : DIR_RIGHT;
+  if (dx !== 0 && dy !== 0) {
+    lastDiagX = dx;
+    lastDiagY = dy;
+    diagGrace = 0;
+    player.faceX = dx;
+    player.faceY = dy;
+  } else if (diagGrace >= 0 && diagGrace <= DIAGONAL_RELEASE_MS) {
+    diagGrace += dt;
+    if (diagGrace > DIAGONAL_RELEASE_MS) {
+      diagGrace = -1;
+      player.faceX = dx;
+      player.faceY = dy;
+    }
   } else {
-    player.facing = dy < 0 ? DIR_UP : DIR_DOWN;
+    player.faceX = dx;
+    player.faceY = dy;
   }
 
   const speed = PLAYER_SPEED * (dx !== 0 && dy !== 0 ? Math.SQRT1_2 : 1);

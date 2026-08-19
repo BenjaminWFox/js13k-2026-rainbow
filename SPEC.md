@@ -190,7 +190,7 @@ draft). Color damage powers scale with **WIS**. Heal, shield, and speed ignore S
 | Yellow | `f1e300` | Speed — passive move-speed increase       |
 | Green  | `08ba00` | Heal — cooldown HP pulse                  |
 | Blue   | `0030e2` | Frost nova — self-centered area freeze (5s cooldown, 0.5s freeze) |
-| Indigo | `6e00ef` | Frostball — nearest-enemy freeze, small impact radius (3s cooldown, 0.5s freeze) |
+| Indigo | `6c00ef` | Frostball — nearest-enemy freeze, small impact radius (3s cooldown, 0.5s freeze) |
 | Violet | `a656ff` | Damage shield — absorbs incoming damage while active |
 
 **Yellow speed:** not fireable. Unlocking yellow **immediately** raises move speed. Speed
@@ -556,7 +556,7 @@ difficulty ladder in §2 — map sheet index → difficulty tier in code.
 
 | Sprite | Origin | Size | Notes |
 |--------|--------|------|-------|
-| Crystal | (89,0) | 3×3 | In-run XP pickup |
+| Crystal | (89,0) | 2×4 | In-run XP pickup |
 | Scrap | (92,0) | 4×4 | Meta-currency pickup; also drawn in the HUD counter |
 | Prismatic Shard | (96,0) | 7×11 | Cutscene narrator; hovers at world center |
 
@@ -610,7 +610,7 @@ the rainbow colors.
 | Yellow  | `f1e300` | `787878`    | Near-aliases `f1e400`/`f1e500`/`f1e600` mapped in code. |
 | Green   | `08ba00` | `5d5d5d`    | |
 | Blue    | `0030e2` | `717171`    | |
-| Indigo  | `6e00ef` | `777777`    | |
+| Indigo  | `6c00ef` | `777777`    | Near-aliases `6e00ef`/`6d00ef`/`6b00ef`/`6f00ef` mapped in code. |
 | Violet  | `a656ff` | `aaaaaa`    | |
 | Neutral | `000000` | unchanged   | Outlines. |
 | Neutral | `747474` | unchanged   | Mid-grey shading. |

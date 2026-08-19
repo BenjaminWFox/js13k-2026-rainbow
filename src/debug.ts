@@ -1,8 +1,10 @@
+import { combatDebug } from './combat';
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
 import { enemies, enemyHitbox, spawnBurst } from './enemies';
 import { wasPressed } from './input';
 import { bakeTiles, getTile, getTileSolid, TILE_WALL } from './map';
 import { unlockedColors } from './palette';
+import { pickups, scrap, xp } from './pickups';
 import { pipePieces } from './pipes';
 import { getPlayerHitbox, player } from './player';
 import { createSprite, rebakeAllSprites } from './sprites';
@@ -181,19 +183,57 @@ export function drawDebugOverlay(
       ) {
         continue;
       }
-      debugRect(ctx, Math.floor(box.x - cameraX), Math.floor(box.y - cameraY), box.w, box.h, '#f0f');
+      debugRect(
+        ctx,
+        Math.floor(box.x - cameraX),
+        Math.floor(box.y - cameraY),
+        box.w,
+        box.h,
+        '#f0f'
+      );
+    }
+    for (const p of pickups) {
+      debugRect(
+        ctx,
+        Math.floor(p.x - cameraX),
+        Math.floor(p.y - cameraY),
+        p.kind === 0 ? 2 : 4,
+        4,
+        '#8f8'
+      );
     }
     const hit = getPlayerHitbox();
     debugRect(ctx, Math.floor(hit.x - cameraX), Math.floor(hit.y - cameraY), hit.w, hit.h, '#f00');
+
+    const combat = combatDebug();
+    debugRect(
+      ctx,
+      Math.floor(combat.horn.x - cameraX),
+      Math.floor(combat.horn.y - cameraY),
+      combat.horn.w,
+      combat.horn.h,
+      '#ff8'
+    );
+    const pcx = Math.floor(hit.x + hit.w / 2 - cameraX) + 0.5;
+    const pcy = Math.floor(hit.y + hit.h / 2 - cameraY) + 0.5;
+    ctx.strokeStyle = '#8ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(pcx, pcy, combat.radius, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   ctx.fillStyle = '#fff';
   ctx.font = '5px monospace';
   ctx.fillText(
-    'arrows: move / 1-7: colors / 8: hitboxes / 9: +50 / 0: heal   enemies: ' +
+    'wasd/arrows: move / 1-7: colors / 8: hitboxes / 9: +50 / 0: heal   enemies: ' +
       enemies.length +
       ' hp: ' +
-      player.hp,
+      player.hp +
+      ' xp: ' +
+      xp +
+      ' scrap: ' +
+      scrap,
     3,
     viewHeight - 3
   );

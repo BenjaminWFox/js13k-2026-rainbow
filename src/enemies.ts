@@ -1,5 +1,7 @@
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
+import { spawnExplosion } from './fx';
 import { getTile, TILE_WALL } from './map';
+import { dropLoot } from './pickups';
 import { pipePieces } from './pipes';
 import { damagePlayer, getPlayerHitbox } from './player';
 import { createSprite, measureContentBox } from './sprites';
@@ -38,6 +40,8 @@ interface EnemyType {
   /** Separation radius: half the larger hitbox dimension. */
   radius: number;
   contactDamage: number;
+  /** Per-type HP is TBD; paperclip=8, +4 per tier. */
+  hp: number;
 }
 
 const enemyTypes: EnemyType[] = [];
@@ -48,6 +52,10 @@ export interface Enemy {
   y: number;
   /** Index into the difficulty ladder (0 = paperclip). */
   type: number;
+  hp: number;
+  /** Knockback velocity, px/ms. */
+  kbX: number;
+  kbY: number;
   bobTime: number;
   contactTimer: number;
 }
@@ -70,6 +78,7 @@ export function bakeEnemyTypes(): void {
       hitH: box.h,
       radius: Math.max(box.w, box.h) / 2,
       contactDamage: tier + 1,
+      hp: 8 + tier * 4,
     });
   }
 }
@@ -115,9 +124,30 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
           enemy.x = spot.x;
           enemy.y = spot.y;
           enemy.contactTimer = 0;
+          enemy.kbX = 0;
+          enemy.kbY = 0;
         }
       }
       continue;
+    }
+
+    // Knockback from stomp, decaying independently of the chase
+    if (enemy.kbX !== 0 || enemy.kbY !== 0) {
+      const kbx = enemy.kbX * dt;
+      const kby = enemy.kbY * dt;
+      if (!hitsWall(enemy.x + type.hitX + kbx, enemy.y + type.hitY, type.hitW, type.hitH)) {
+        enemy.x += kbx;
+      }
+      if (!hitsWall(enemy.x + type.hitX, enemy.y + type.hitY + kby, type.hitW, type.hitH)) {
+        enemy.y += kby;
+      }
+      const decay = Math.exp(-dt / 80);
+      enemy.kbX *= decay;
+      enemy.kbY *= decay;
+      if (Math.hypot(enemy.kbX, enemy.kbY) < 0.01) {
+        enemy.kbX = 0;
+        enemy.kbY = 0;
+      }
     }
 
     // Chase: straight toward the player; walls block, pipes don't
@@ -167,6 +197,9 @@ function trySpawn(playerCenterX: number, playerCenterY: number, radius: number):
       x: spot.x,
       y: spot.y,
       type: tier,
+      hp: type.hp,
+      kbX: 0,
+      kbY: 0,
       bobTime: Math.random() * BOB_PERIOD_MS,
       contactTimer: 0,
     });
@@ -332,4 +365,36 @@ export function drawEnemies(
 export function enemyHitbox(enemy: Enemy): { x: number; y: number; w: number; h: number } {
   const type = enemyTypes[enemy.type];
   return { x: enemy.x + type.hitX, y: enemy.y + type.hitY, w: type.hitW, h: type.hitH };
+}
+
+/** Returns true if the enemy died. Safe to call while reverse-iterating `enemies`. */
+export function hurtEnemyAt(index: number, amount: number): boolean {
+  const enemy = enemies[index];
+  enemy.hp -= amount;
+  if (enemy.hp > 0) {
+    return false;
+  }
+  const type = enemyTypes[enemy.type];
+  const cx = enemy.x + type.hitX + type.hitW / 2;
+  const cy = enemy.y + type.hitY + type.hitH / 2;
+  spawnExplosion(cx, cy, 0xb1b1b1, 12);
+  dropLoot(cx, cy);
+  enemies.splice(index, 1);
+  return true;
+}
+
+export function applyKnockback(enemy: Enemy, fromX: number, fromY: number, speed: number): void {
+  const type = enemyTypes[enemy.type];
+  const cx = enemy.x + type.hitX + type.hitW / 2;
+  const cy = enemy.y + type.hitY + type.hitH / 2;
+  let dx = cx - fromX;
+  let dy = cy - fromY;
+  let dist = Math.hypot(dx, dy);
+  if (dist < 0.01) {
+    dx = 1;
+    dy = 0;
+    dist = 1;
+  }
+  enemy.kbX = (dx / dist) * speed;
+  enemy.kbY = (dy / dist) * speed;
 }
