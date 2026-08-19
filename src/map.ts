@@ -1,8 +1,20 @@
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
-import { cssColor, GREEN, rainbowShade } from './palette';
+import { cssColor, RAINBOW_COLORS, rainbowShade } from './palette';
 
-export const TILE_GRASS = 0;
-export const TILE_WALL = 1;
+/** 10×10 map of portal cells (red pixels); (0,0) is top-left. */
+export const PORTAL_CELLS: [number, number][] = [
+  [0, 0],
+  [5, 0],
+  [9, 1],
+  [0, 5],
+  [9, 6],
+  [1, 9],
+  [6, 9],
+];
+
+/** Ground tiles 0–6 match RAINBOW_COLORS / pipe kits. */
+export const TILE_WHITE = 7;
+export const TILE_WALL = 8;
 
 const tiles = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
 
@@ -46,9 +58,53 @@ export function getTileSolid(
   };
 }
 
-/** Grass fill with a solid wall ring around the map edge. */
+/** Lumpy plaza radius in tiles — 3- and 5-lobe wobble, not a clean circle. */
+export function hubRadiusTiles(ang: number): number {
+  return 9 * (1 + 0.14 * Math.sin(ang * 3) + 0.09 * Math.sin(ang * 5 + 0.8));
+}
+
+function nearestPipeColor(angle: number, portalAngles: number[]): number {
+  let best = 0;
+  let bestDiff = Math.PI * 2;
+  for (let i = 0; i < portalAngles.length; i++) {
+    let diff = Math.abs(angle - portalAngles[i]);
+    if (diff > Math.PI) {
+      diff = Math.PI * 2 - diff;
+    }
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
+ * Seven pizza slices aimed at the portals, meeting a lumpy white hub.
+ * Edge ring is a solid wall.
+ */
 export function generateMap(): void {
-  tiles.fill(TILE_GRASS);
+  const midX = MAP_WIDTH / 2;
+  const midY = MAP_HEIGHT / 2;
+  const portalAngles = PORTAL_CELLS.map(([gx, gy]) => {
+    const px = (gx + 0.5) * (MAP_WIDTH / 10) - midX;
+    const py = (gy + 0.5) * (MAP_HEIGHT / 10) - midY;
+    return Math.atan2(py, px);
+  });
+
+  for (let ty = 0; ty < MAP_HEIGHT; ty++) {
+    for (let tx = 0; tx < MAP_WIDTH; tx++) {
+      const dx = tx + 0.5 - midX;
+      const dy = ty + 0.5 - midY;
+      const dist = Math.hypot(dx, dy);
+      const ang = Math.atan2(dy, dx);
+      if (dist < hubRadiusTiles(ang)) {
+        setTile(tx, ty, TILE_WHITE);
+      } else {
+        setTile(tx, ty, nearestPipeColor(ang, portalAngles));
+      }
+    }
+  }
 
   for (let i = 0; i < MAP_WIDTH; i++) {
     setTile(i, 0, TILE_WALL);
@@ -61,8 +117,7 @@ export function generateMap(): void {
 export const tileCanvases: HTMLCanvasElement[] = [];
 
 export function bakeTiles(): void {
-  const painters = [paintGrass, paintWall];
-  painters.forEach((paint, tile) => {
+  for (let tile = 0; tile <= TILE_WALL; tile++) {
     let canvas = tileCanvases[tile];
     if (!canvas) {
       canvas = document.createElement('canvas');
@@ -70,14 +125,21 @@ export function bakeTiles(): void {
       canvas.height = TILE_SIZE;
       tileCanvases[tile] = canvas;
     }
-    paint(canvas.getContext('2d') as CanvasRenderingContext2D);
-  });
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    if (tile === TILE_WALL) {
+      paintWall(ctx);
+    } else if (tile === TILE_WHITE) {
+      paintGround(ctx, '#ffffff', cssColor(0xcecece));
+    } else {
+      paintGround(ctx, cssColor(rainbowShade(tile, 0.8)), cssColor(RAINBOW_COLORS[tile]));
+    }
+  }
 }
 
-function paintGrass(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.65));
+function paintGround(ctx: CanvasRenderingContext2D, fill: string, highlight: string): void {
+  ctx.fillStyle = fill;
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-  ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.55));
+  ctx.fillStyle = highlight;
   const random = mulberry32(7);
   for (let i = 0; i < 8; i++) {
     ctx.fillRect(Math.floor(random() * TILE_SIZE), Math.floor(random() * TILE_SIZE), 2, 1);
@@ -85,9 +147,9 @@ function paintGrass(ctx: CanvasRenderingContext2D): void {
 }
 
 function paintWall(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.4));
+  ctx.fillStyle = cssColor(0x747474);
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-  ctx.fillStyle = cssColor(rainbowShade(GREEN, 0.55));
+  ctx.fillStyle = cssColor(0xcecece);
   const inset = 2;
   ctx.fillRect(inset, inset, TILE_SIZE - inset * 2, TILE_SIZE - inset * 2);
 }

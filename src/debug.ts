@@ -1,6 +1,6 @@
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
 import { wasPressed } from './input';
-import { bakeTiles, getTile, getTileSolid, TILE_GRASS } from './map';
+import { bakeTiles, getTile, getTileSolid, TILE_WALL } from './map';
 import { unlockedColors } from './palette';
 import { pipePieces } from './pipes';
 import { getPlayerHitbox } from './player';
@@ -67,7 +67,7 @@ export function initDebugProps(): void {
         if ((tx - cx) * (tx - cx) + (ty - cy) * (ty - cy) < 36) {
           continue;
         }
-        if (getTile(tx, ty) === TILE_GRASS) {
+        if (getTile(tx, ty) !== TILE_WALL) {
           break;
         }
       }

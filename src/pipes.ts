@@ -1,4 +1,5 @@
 import { MAP_HEIGHT, MAP_WIDTH, PLAYER_HIT, TILE_SIZE } from './constants';
+import { hubRadiusTiles, PORTAL_CELLS } from './map';
 import { RAINBOW_COLORS } from './palette';
 import { createSprite } from './sprites';
 
@@ -613,19 +614,7 @@ function buildPipe(
   pushCap(cx, cy, dir, hFlip, vFlip);
 }
 
-/** 10×10 map of portal cells (red pixels); (0,0) is top-left. */
-const PORTAL_CELLS: [number, number][] = [
-  [0, 0],
-  [5, 0],
-  [9, 1],
-  [0, 5],
-  [9, 6],
-  [1, 9],
-  [6, 9],
-];
-
 const SLOT = WORLD_W / 10;
-const CAP_DIST = 80;
 
 function portalFromCell(
   gx: number,
@@ -670,7 +659,8 @@ function portalFromCell(
 
 /**
  * Place 7 portals from the 10×10 edge map and grow a pipe from each toward
- * a cap ~80px from the player, keeping a player-width gap from other pipes.
+ * a cap just outside the white hub (still on that pipe's color), keeping a
+ * player-width gap from other pipes.
  */
 export function generatePipes(seed: number): void {
   pipePieces.length = 0;
@@ -693,8 +683,11 @@ export function generatePipes(seed: number): void {
     const dx = startX - CENTER_X;
     const dy = cy - CENTER_Y;
     const len = Math.hypot(dx, dy) || 1;
-    const targetX = CENTER_X + (dx / len) * CAP_DIST;
-    const targetY = CENTER_Y + (dy / len) * CAP_DIST;
+    const ang = Math.atan2(dy, dx);
+    // One tile past the hub edge so the cap sits on color, not white
+    const capDist = (hubRadiusTiles(ang) + 1) * TILE_SIZE;
+    const targetX = CENTER_X + (dx / len) * capDist;
+    const targetY = CENTER_Y + (dy / len) * capDist;
 
     pushPortal(portalX, portalY, emergeEast);
     useKit(i);
