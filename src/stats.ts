@@ -18,6 +18,17 @@ export const POWER_FROST_NOVA = 6;
 export const POWER_FROSTBALL = 7;
 export const POWER_SHIELD = 8;
 
+/** Color index (red→violet) → the power that color grants. */
+export const COLOR_POWERS = [
+  POWER_FIREBALL,
+  POWER_FLAME_NOVA,
+  POWER_SPEED,
+  POWER_HEAL,
+  POWER_FROST_NOVA,
+  POWER_FROSTBALL,
+  POWER_SHIELD,
+];
+
 export const STAT_CAP = 5;
 
 // Per-rank amounts are TBD; placeholders until the tuning phase.
@@ -26,6 +37,8 @@ export const CON_HP_PER_RANK = 20;
 export const WIS_PER_RANK = 0.2;
 export const POWER_DMG_PER_EVEN = 0.25;
 export const POWER_CD_PER_ODD = 0.15;
+/** Yellow speed: every rank raises move speed (no cooldown). */
+export const SPEED_PER_RANK = 0.15;
 
 const STAT_TITLE = ['STR', 'DEX', 'CON', 'WIS'];
 const STAT_BODY = ['KIT DMG', 'LESS HITS', 'MAX HP', 'COLOR DMG'];
@@ -64,15 +77,28 @@ export function totalStat(id: number): number {
   return Math.min(STAT_CAP, inRunStats[id] + shopStats[id]);
 }
 
+/** Even-rank damage/amount bonus (heal absorb, shield, color+kit dmg). */
+export function powerAmount(base: number, powerId: number): number {
+  return base * (1 + POWER_DMG_PER_EVEN * (powerRanks[powerId] >> 1));
+}
+
 export function kitDamage(base: number, powerId: number): number {
-  const str = 1 + STR_PER_RANK * totalStat(STAT_STR);
-  const stack = 1 + POWER_DMG_PER_EVEN * (powerRanks[powerId] >> 1);
-  return base * str * stack;
+  return powerAmount(base, powerId) * (1 + STR_PER_RANK * totalStat(STAT_STR));
+}
+
+/** Fireball and flame nova — WIS + even-rank stacks. Frost is freeze-only. */
+export function colorDamage(base: number, powerId: number): number {
+  return powerAmount(base, powerId) * (1 + WIS_PER_RANK * totalStat(STAT_WIS));
 }
 
 export function powerCooldown(base: number, powerId: number): number {
   const cdRanks = (powerRanks[powerId] - 1) >> 1;
   return base * (1 - POWER_CD_PER_ODD * cdRanks);
+}
+
+/** Rank 0 = 1×; each owned yellow rank adds SPEED_PER_RANK. */
+export function speedMul(): number {
+  return 1 + SPEED_PER_RANK * powerRanks[POWER_SPEED];
 }
 
 export function grantPower(id: number): void {
@@ -107,6 +133,9 @@ function powerBody(id: number, nextRank: number): string {
   }
   if (id === POWER_SHIELD) {
     return nextRank & 1 ? 'FASTER' : 'ABSORB UP';
+  }
+  if (id === POWER_FROST_NOVA || id === POWER_FROSTBALL) {
+    return nextRank & 1 ? 'FASTER' : 'FREEZE UP';
   }
   return nextRank & 1 ? 'FASTER' : 'DMG UP';
 }

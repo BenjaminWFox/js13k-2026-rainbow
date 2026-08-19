@@ -10,7 +10,7 @@ import { spawnExplosion } from './fx';
 import { isDown } from './input';
 import { getTileSolid } from './map';
 import { pipePieces } from './pipes';
-import { CON_HP_PER_RANK, STAT_CON, STAT_DEX, totalStat } from './stats';
+import { CON_HP_PER_RANK, STAT_CON, STAT_DEX, speedMul, totalStat } from './stats';
 
 export const player = {
   // Top-left corner of the player sprite, world-space pixels
@@ -23,6 +23,10 @@ export const player = {
   // Baseline 100 HP; CON raises the max, shop Start HP lands later
   hp: 100,
   maxHp: 100,
+  /** Remaining freeze (ms). Frozen entities take +25% damage. */
+  frozen: 0,
+  /** Remaining shield absorb (HP). Lasts until depleted. */
+  shield: 0,
 };
 
 /** Death handling (revives, run-end overlay) lands with the run lifecycle phase. */
@@ -30,13 +34,32 @@ export function damagePlayer(amount: number): void {
   if (amount <= 0 || player.hp <= 0) {
     return;
   }
+  if (player.frozen > 0) {
+    amount *= 1.25;
+  }
   amount *= 1 - 0.1 * totalStat(STAT_DEX);
   const hit = getPlayerHitbox();
   const cx = hit.x + hit.w / 2;
   const cy = hit.y + hit.h / 2;
+  if (player.shield > 0) {
+    const used = Math.min(player.shield, amount);
+    player.shield -= used;
+    amount -= used;
+    spawnExplosion(cx, cy, 0xa656ff, 4);
+    if (player.shield <= 0) {
+      player.shield = 0;
+    }
+    if (amount <= 0) {
+      return;
+    }
+  }
   spawnExplosion(cx, cy, 0x000000, 5);
   spawnExplosion(cx, cy, 0xffffff, 5);
   player.hp = Math.max(0, player.hp - amount);
+}
+
+export function freezePlayer(ms: number): void {
+  player.frozen = Math.max(player.frozen, ms);
 }
 
 const DIAGONAL_RELEASE_MS = 100;
@@ -54,12 +77,20 @@ export function resetPlayer(): void {
   player.moving = false;
   player.maxHp = 100 + CON_HP_PER_RANK * totalStat(STAT_CON);
   player.hp = player.maxHp;
+  player.frozen = 0;
+  player.shield = 0;
   lastDiagX = 1;
   lastDiagY = 0;
   diagGrace = -1;
 }
 
 export function updatePlayer(dt: number): void {
+  if (player.frozen > 0) {
+    player.frozen = Math.max(0, player.frozen - dt);
+    player.moving = false;
+    return;
+  }
+
   let dx = 0;
   let dy = 0;
   if (isDown('ArrowLeft') || isDown('KeyA')) {
@@ -103,7 +134,7 @@ export function updatePlayer(dt: number): void {
     player.faceY = dy;
   }
 
-  const speed = PLAYER_SPEED * (dx !== 0 && dy !== 0 ? Math.SQRT1_2 : 1);
+  const speed = PLAYER_SPEED * speedMul() * (dx !== 0 && dy !== 0 ? Math.SQRT1_2 : 1);
   moveWithCollision(dx * speed * dt, dy * speed * dt);
 }
 

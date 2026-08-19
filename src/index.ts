@@ -92,7 +92,8 @@ function gameLoop(time: number): void {
   updateOverlays(viewWidth, viewHeight);
   if (!isWorldFrozen()) {
     updatePlayer(dt);
-    updateCombat(dt);
+    const cam = cameraOrigin();
+    updateCombat(dt, cam.x, cam.y, viewWidth, viewHeight);
     updateEnemies(dt, viewWidth, viewHeight);
     updatePickups(dt);
     updateExplosions(dt);
@@ -106,16 +107,7 @@ function render(): void {
   // via floor(worldX - cameraX). This keeps the player's screen position
   // perfectly stable while the camera follows (no 1px jitter from double
   // rounding), regardless of view size parity.
-  const cameraX = clamp(
-    player.x + PLAYER_WIDTH / 2 - viewWidth / 2,
-    0,
-    MAP_WIDTH * TILE_SIZE - viewWidth
-  );
-  const cameraY = clamp(
-    player.y + PLAYER_HEIGHT / 2 - viewHeight / 2,
-    0,
-    MAP_HEIGHT * TILE_SIZE - viewHeight
-  );
+  const { x: cameraX, y: cameraY } = cameraOrigin();
 
   // Tiles: draw only the visible range
   const firstTileX = Math.floor(cameraX / TILE_SIZE);
@@ -182,6 +174,13 @@ function render(): void {
       viewHeight
     );
   }
+}
+
+function cameraOrigin(): { x: number; y: number } {
+  return {
+    x: clamp(player.x + PLAYER_WIDTH / 2 - viewWidth / 2, 0, MAP_WIDTH * TILE_SIZE - viewWidth),
+    y: clamp(player.y + PLAYER_HEIGHT / 2 - viewHeight / 2, 0, MAP_HEIGHT * TILE_SIZE - viewHeight),
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {

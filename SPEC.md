@@ -150,7 +150,7 @@ The pipe-unlock overlay still fires in either case (see the miniboss death seque
   sticks out above). Same box for every facing; sprite facing art is TBD.
 - Movement collision uses that hitbox only.
 - The player **can be frozen** (by blue/indigo miniboss powers) and, like all frozen
-  entities, takes **double damage** while frozen.
+  entities, takes **+25% damage** while frozen.
 
 ### Auto-combat
 
@@ -165,23 +165,25 @@ The pipe-unlock overlay still fires in either case (see the miniboss death seque
   even if it wasn't the original target. They pass **over pipes**, are **blocked by
   walls**, and **despawn off-screen** on a miss.
 - **Freeze:**
-  - **Frost nova** — fires every **5s**; freezes regular enemies in its area for **0.5s**.
-  - **Frostball** — fires every **3s**; freezes regular enemies within a radius of
-    **2× sprite size from the impact point** for **0.5s**.
-  - Frozen entities (enemies *and* player) take **double damage**.
+  - **Frost nova** — freeze only (no damage); fires every **5s**; freezes regular
+    enemies in its area for **0.5s**.
+  - **Frostball** — freeze only (no damage); fires every **3s**; freezes regular
+    enemies within a radius of **2× sprite size from the impact point** for **0.5s**.
+  - Frozen entities (enemies *and* player) take **+25% damage**.
   - Minibosses and the final boss **cannot be frozen** — they are **slowed** instead, for
     **2× the freeze duration**.
 - **Heal** (green): auto-fires a small HP pulse; show a small green `+` when it ticks.
-- **Shield** (violet): auto-fires a brief absorb; show a visible ring or half-circle
-  around the player while active.
+- **Shield** (violet): auto-fires an absorb that **stays until used up**; show a
+  visible ring around the player sprite while active.
 - **Yellow speed** is not a fireable ability (see Powers).
 - Remaining numbers TBD: horn/stomp/fireball/flame-nova cooldowns and damage, stomp
-  knock-back, heal amount, shield duration/absorb.
+  knock-back, heal amount, shield absorb.
 
 ### Powers (one per released color)
 
 Destroying a pipe **grants that power immediately** (it does not go through the level-up
-draft). Color damage powers scale with **WIS**. Heal, shield, and speed ignore STR/WIS.
+draft). Color damage powers (fireball, flame nova) scale with **WIS**. Heal, shield,
+speed, frost nova, and frostball ignore STR/WIS.
 
 | Color  | Hex      | Power                                    |
 |--------|----------|------------------------------------------|
@@ -208,9 +210,9 @@ the draft pool.
 | STR | Increases starting-kit damage only (horn, stomp) |
 | DEX | Reduces incoming damage by **10% per rank** (multiplied into damage taken; max 50% at cap) |
 | CON | Increases player max HP |
-| WIS | Increases color damage powers (fireball, frostball, flame nova, frost nova) |
+| WIS | Increases color damage powers (fireball, flame nova) |
 
-Heal, shield, and speed ignore STR/WIS. Per-rank amounts for STR/CON/WIS: **TBD**.
+Heal, shield, speed, frost nova, and frostball ignore STR/WIS. Per-rank amounts for STR/CON/WIS: **TBD**.
 
 ### XP and level-up
 
@@ -222,8 +224,9 @@ Heal, shield, and speed ignore STR/WIS. Per-rank amounts for STR/CON/WIS: **TBD*
   Luck can add a 4th and 5th card (see Scrap shop) — extras are chanced, not guaranteed.
 - **Draft pool:** STR / DEX / CON / WIS (until capped) + every owned attack/power (horn,
   stomp, and any color power already granted, including yellow speed).
-- **Power stack rule:** rank 1 = base power. **Even ranks add damage; odd ranks (3, 5, …)
-  reduce cooldown.** Exact per-rank amounts TBD. Stat picks simply add a rank.
+- **Power stack rule:** rank 1 = base power. **Even ranks add damage** (or freeze
+  duration for frost nova/frostball); **odd ranks (3, 5, …) reduce cooldown.** Exact
+  per-rank amounts TBD. Stat picks simply add a rank.
 - Duplicate cards in a single hand: TBD.
 
 ### Magnet and pickups
@@ -636,7 +639,7 @@ the rainbow colors.
   coordinates need visual tuning.
 - XP curve (crystals per level) and inherent crystal/scrap drop chances per enemy type.
 - Combat numbers: horn/stomp/fireball/flame-nova cooldowns and damage, stomp knock-back,
-  heal amount, shield duration/absorb, yellow speed per stack, per-rank power amounts.
+  heal amount, shield absorb, yellow speed per stack, per-rank power amounts.
 - Per-rank stat amounts for STR/CON/WIS (DEX is decided: 10%/rank); whether CON heals
   current HP when max HP grows.
 - Whether **power** stacks are capped (stats cap at 5 ranks; powers currently uncapped).
@@ -665,7 +668,8 @@ self-contained work any competent model can execute from this spec.
 
 Already built (no work needed): bake engine, palette/desaturation, pipes, world slices +
 plaza, camera, player movement/collision (§3), swarm core, starting-kit combat, packed
-font + HUD, menu/overlay framework (pause, level-up draft, stats).
+font + HUD, menu/overlay framework (pause, level-up draft, stats), color powers +
+projectiles + freeze.
 
 | Phase | Work | Model | Why | Complete |
 |-------|------|-------|-----|----------|
@@ -673,7 +677,7 @@ font + HUD, menu/overlay framework (pause, level-up draft, stats).
 | 2 | **Starting-kit combat:** horn, stomp + knockback, enemy HP/death, pixel explosion, crystal/scrap drops, magnet + pickup | Capable | Fully specified, self-contained math; makes the game playable end-to-end early | ✅ |
 | 3 | **Packed font + HUD:** font renderer + label baking, XP bar, "Level #", scrap counter, color squares, pause icon | Capable | Well-bounded; unblocks every later text UI | ✅ |
 | 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere | ✅ |
-| 5 | **Powers:** all 7 color powers, projectiles, freeze/slow, WIS scaling, stack rule | Flagship | Seven abilities sharing targeting/cooldown/freeze machinery; minibosses reuse these | |
+| 5 | **Powers:** all 7 color powers, projectiles, freeze/slow, WIS scaling, stack rule | Flagship | Seven abilities sharing targeting/cooldown/freeze machinery; minibosses reuse these | ✅ |
 | 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | |
 | 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework | |
 | 8 | **Final boss + finale:** plaza portal, all-powers boss, map-wide pursuit, win state | Capable | Reuses phase-5 powers and phase-6 patterns; numbers are specified | |
@@ -682,9 +686,13 @@ font + HUD, menu/overlay framework (pause, level-up draft, stats).
 
 Notes:
 
-- Phase 5 is next. The overlay queue (`enqueueOverlay`) and card/menu widget are
-  ready for pipe-unlock, shop, and death/win screens. Title currently has Start
-  only; Upgrades/shop ranks land in phase 7. Placeholder XP curve is
-  `5 * current level` crystals until tuning.
+- Phase 6 is next. Debug keys 1–7 grant/revoke the matching color power
+  (fireball through shield) for playtesting. `spawnBolt` / `fireNova` /
+  `crowdControl` are ready for minibosses. Placeholder combat numbers follow
+  the starting-kit style until the tuning phase. The overlay queue
+  (`enqueueOverlay`) and card/menu widget are ready for pipe-unlock, shop,
+  and death/win screens. Title currently has Start only; Upgrades/shop ranks
+  land in phase 7. Placeholder XP curve is `5 * current level` crystals
+  until tuning.
 - Audio (phase 10) stays deferred per §2; drop stretch items before shop rows per the
   §1 fallback ladder.

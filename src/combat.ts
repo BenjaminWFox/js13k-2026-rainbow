@@ -1,12 +1,35 @@
-import { PLAYER_HEIGHT, PLAYER_WIDTH } from './constants';
-import { applyKnockback, enemies, enemyHitbox, hurtEnemyAt } from './enemies';
-import { getPlayerHitbox, player } from './player';
-import { kitDamage, POWER_HORN, POWER_STOMP, powerCooldown } from './stats';
+import { PLAYER_HEIGHT, PLAYER_WIDTH, TILE_SIZE } from './constants';
+import {
+  applyKnockback,
+  crowdControl,
+  crowdControlAt,
+  enemies,
+  enemyHitbox,
+  hurtEnemyAt,
+} from './enemies';
+import { drawText } from './font';
+import { getTile, TILE_WALL } from './map';
+import { RAINBOW_COLORS } from './palette';
+import { damagePlayer, freezePlayer, getPlayerHitbox, player } from './player';
+import {
+  colorDamage,
+  kitDamage,
+  POWER_FIREBALL,
+  POWER_FLAME_NOVA,
+  POWER_FROST_NOVA,
+  POWER_FROSTBALL,
+  POWER_HEAL,
+  POWER_HORN,
+  POWER_SHIELD,
+  POWER_STOMP,
+  powerAmount,
+  powerCooldown,
+  powerRanks,
+} from './stats';
 
 // Combat numbers are TBD; placeholders until the tuning phase.
 const HORN_COOLDOWN_MS = 650;
 const HORN_DAMAGE = 10;
-// Old poke was a 13×13 box whose front sat 17.5px from the player center.
 const HORN_FORWARD = 35;
 const HORN_WIDTH = 13 * 1.5;
 const HORN_FLASH_MS = 150;
@@ -17,8 +40,33 @@ const STOMP_RADIUS = 66;
 const STOMP_KNOCKBACK = 0.36;
 const STOMP_FLASH_MS = 200;
 
-let hornTimer = 0;
-let stompTimer = 0;
+const FIREBALL_COOLDOWN_MS = 800;
+const FIREBALL_DAMAGE = 8;
+const FROSTBALL_COOLDOWN_MS = 3000;
+const BOLT_SPEED = 0.18;
+const BOLT_SIZE = 4;
+
+const FLAME_NOVA_COOLDOWN_MS = 2200;
+const FLAME_NOVA_DAMAGE = 6;
+const FROST_NOVA_COOLDOWN_MS = 5000;
+const NOVA_RADIUS = 56;
+const NOVA_FLASH_MS = 280;
+const FREEZE_MS = 500;
+/** 2× the 7px enemy sprite cell — "small impact radius". */
+const FROSTBALL_RADIUS = 14;
+
+const HEAL_COOLDOWN_MS = 4000;
+const HEAL_AMOUNT = 8;
+const HEAL_FX_MS = 450;
+
+const SHIELD_COOLDOWN_MS = 6000;
+const SHIELD_ABSORB = 15;
+const SHIELD_RADIUS = 13;
+
+export const BOLT_FIRE = 0;
+export const BOLT_FROST = 1;
+
+const cdTimer = [0, 0, 0, 0, 0, 0, 0, 0, 0];
 let hornFlash = 0;
 let stompFlash = 0;
 
@@ -26,6 +74,41 @@ const hornBox = { x: 0, y: 0, w: 0, h: 0 };
 let hornFaceX = 1;
 let hornFaceY = 0;
 const hornFrom = { x: 0, y: 0 };
+
+interface Bolt {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  kind: number;
+  damage: number;
+  freezeMs: number;
+  friendly: boolean;
+}
+
+interface RingFx {
+  x: number;
+  y: number;
+  radius: number;
+  life: number;
+  maxLife: number;
+  color: string;
+}
+
+interface HealFx {
+  x: number;
+  y: number;
+  life: number;
+}
+
+const bolts: Bolt[] = [];
+const novas: RingFx[] = [];
+const heals: HealFx[] = [];
+
+let viewX = 0;
+let viewY = 0;
+let viewW = 1;
+let viewH = 1;
 
 function hornHitbox(): { x: number; y: number; w: number; h: number } {
   const center = playerCenter();
@@ -81,27 +164,132 @@ function overlaps(
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
-export function updateCombat(dt: number): void {
-  hornTimer -= dt;
-  stompTimer -= dt;
+function wallBox(x: number, y: number, w: number, h: number): boolean {
+  const x0 = Math.floor(x / TILE_SIZE);
+  const y0 = Math.floor(y / TILE_SIZE);
+  const x1 = Math.floor((x + w - 0.001) / TILE_SIZE);
+  const y1 = Math.floor((y + h - 0.001) / TILE_SIZE);
+  for (let ty = y0; ty <= y1; ty++) {
+    for (let tx = x0; tx <= x1; tx++) {
+      if (getTile(tx, ty) === TILE_WALL) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function nearestEnemyCenter(fromX: number, fromY: number): { x: number; y: number } | null {
+  let bestX = 0;
+  let bestY = 0;
+  let bestD = Infinity;
+  for (const enemy of enemies) {
+    const box = enemyHitbox(enemy);
+    const ex = box.x + box.w / 2;
+    const ey = box.y + box.h / 2;
+    const d = Math.hypot(ex - fromX, ey - fromY);
+    if (d < bestD) {
+      bestD = d;
+      bestX = ex;
+      bestY = ey;
+    }
+  }
+  return bestD === Infinity ? null : { x: bestX, y: bestY };
+}
+
+function tickFire(id: number, dt: number, baseCd: number, fire: () => boolean): void {
+  if (powerRanks[id] < 1) {
+    return;
+  }
+  cdTimer[id] -= dt;
+  if (cdTimer[id] > 0) {
+    return;
+  }
+  if (fire()) {
+    cdTimer[id] += powerCooldown(baseCd, id);
+  } else {
+    cdTimer[id] = 0;
+  }
+}
+
+export function updateCombat(
+  dt: number,
+  cameraX: number,
+  cameraY: number,
+  viewWidth: number,
+  viewHeight: number
+): void {
+  viewX = cameraX;
+  viewY = cameraY;
+  viewW = viewWidth;
+  viewH = viewHeight;
+
   hornFlash = Math.max(0, hornFlash - dt);
   stompFlash = Math.max(0, stompFlash - dt);
 
-  if (hornTimer <= 0) {
+  tickFire(POWER_HORN, dt, HORN_COOLDOWN_MS, () => {
     fireHorn();
-    hornTimer += powerCooldown(HORN_COOLDOWN_MS, POWER_HORN);
-  }
-  if (stompTimer <= 0) {
+    return true;
+  });
+  tickFire(POWER_STOMP, dt, STOMP_COOLDOWN_MS, () => {
     fireStomp();
-    stompTimer += powerCooldown(STOMP_COOLDOWN_MS, POWER_STOMP);
+    return true;
+  });
+  tickFire(POWER_FIREBALL, dt, FIREBALL_COOLDOWN_MS, tryFireball);
+  tickFire(POWER_FROSTBALL, dt, FROSTBALL_COOLDOWN_MS, tryFrostball);
+  tickFire(POWER_FLAME_NOVA, dt, FLAME_NOVA_COOLDOWN_MS, () => {
+    const c = playerCenter();
+    fireNova(
+      c.x,
+      c.y,
+      NOVA_RADIUS,
+      colorDamage(FLAME_NOVA_DAMAGE, POWER_FLAME_NOVA),
+      0,
+      '#ff8200',
+      true
+    );
+    return true;
+  });
+  tickFire(POWER_FROST_NOVA, dt, FROST_NOVA_COOLDOWN_MS, () => {
+    const c = playerCenter();
+    fireNova(c.x, c.y, NOVA_RADIUS, 0, powerAmount(FREEZE_MS, POWER_FROST_NOVA), '#0030e2', true);
+    return true;
+  });
+  tickFire(POWER_HEAL, dt, HEAL_COOLDOWN_MS, () => {
+    player.hp = Math.min(player.maxHp, player.hp + powerAmount(HEAL_AMOUNT, POWER_HEAL));
+    heals.push({ x: player.x + PLAYER_WIDTH / 2, y: player.y - 2, life: HEAL_FX_MS });
+    return true;
+  });
+  tickFire(POWER_SHIELD, dt, SHIELD_COOLDOWN_MS, () => {
+    if (player.shield > 0) {
+      return false;
+    }
+    player.shield = powerAmount(SHIELD_ABSORB, POWER_SHIELD);
+    return true;
+  });
+
+  updateBolts(dt);
+  for (let i = novas.length - 1; i >= 0; i--) {
+    novas[i].life -= dt;
+    if (novas[i].life <= 0) {
+      novas.splice(i, 1);
+    }
+  }
+  for (let i = heals.length - 1; i >= 0; i--) {
+    heals[i].life -= dt;
+    if (heals[i].life <= 0) {
+      heals.splice(i, 1);
+    }
   }
 }
 
 export function resetCombat(): void {
-  hornTimer = 0;
-  stompTimer = 0;
+  cdTimer.fill(0);
   hornFlash = 0;
   stompFlash = 0;
+  bolts.length = 0;
+  novas.length = 0;
+  heals.length = 0;
 }
 
 function fireHorn(): void {
@@ -149,6 +337,165 @@ function fireStomp(): void {
     }
     if (!hurtEnemyAt(i, kitDamage(STOMP_DAMAGE, POWER_STOMP))) {
       applyKnockback(enemies[i], center.x, center.y, STOMP_KNOCKBACK);
+    }
+  }
+}
+
+function tryFireball(): boolean {
+  const c = playerCenter();
+  const t = nearestEnemyCenter(c.x, c.y);
+  if (!t) {
+    return false;
+  }
+  return spawnBolt(
+    c.x,
+    c.y,
+    t.x,
+    t.y,
+    BOLT_FIRE,
+    colorDamage(FIREBALL_DAMAGE, POWER_FIREBALL),
+    true
+  );
+}
+
+function tryFrostball(): boolean {
+  const c = playerCenter();
+  const t = nearestEnemyCenter(c.x, c.y);
+  if (!t) {
+    return false;
+  }
+  return spawnBolt(
+    c.x,
+    c.y,
+    t.x,
+    t.y,
+    BOLT_FROST,
+    0,
+    true,
+    powerAmount(FREEZE_MS, POWER_FROSTBALL)
+  );
+}
+
+/**
+ * Straight-line bolt toward a point at fire-time (no tracking).
+ * `friendly` hits enemies; otherwise it hits the player. Minibosses reuse this.
+ */
+export function spawnBolt(
+  x: number,
+  y: number,
+  tx: number,
+  ty: number,
+  kind: number,
+  damage: number,
+  friendly: boolean,
+  freezeMs = 0
+): boolean {
+  const dx = tx - x;
+  const dy = ty - y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.01) {
+    return false;
+  }
+  bolts.push({
+    x,
+    y,
+    vx: (dx / dist) * BOLT_SPEED,
+    vy: (dy / dist) * BOLT_SPEED,
+    kind,
+    damage,
+    freezeMs,
+    friendly,
+  });
+  return true;
+}
+
+/** Area burst. `friendly` damages enemies; otherwise it hits the player. */
+export function fireNova(
+  x: number,
+  y: number,
+  radius: number,
+  damage: number,
+  freezeMs: number,
+  color: string,
+  friendly: boolean
+): void {
+  novas.push({ x, y, radius, life: NOVA_FLASH_MS, maxLife: NOVA_FLASH_MS, color });
+  if (friendly) {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const enemy = enemies[i];
+      const box = enemyHitbox(enemy);
+      if (Math.hypot(box.x + box.w / 2 - x, box.y + box.h / 2 - y) > radius) {
+        continue;
+      }
+      let alive = true;
+      if (damage > 0) {
+        alive = !hurtEnemyAt(i, damage);
+      }
+      if (alive && freezeMs > 0) {
+        crowdControl(enemy, freezeMs);
+      }
+    }
+    return;
+  }
+  const hit = getPlayerHitbox();
+  if (Math.hypot(hit.x + hit.w / 2 - x, hit.y + hit.h / 2 - y) <= radius) {
+    if (damage > 0) {
+      damagePlayer(damage);
+    }
+    if (freezeMs > 0) {
+      freezePlayer(freezeMs);
+    }
+  }
+}
+
+function updateBolts(dt: number): void {
+  const hw = BOLT_SIZE / 2;
+  for (let i = bolts.length - 1; i >= 0; i--) {
+    const p = bolts[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    if (wallBox(p.x - hw, p.y - hw, BOLT_SIZE, BOLT_SIZE)) {
+      bolts.splice(i, 1);
+      continue;
+    }
+    const sx = p.x - viewX;
+    const sy = p.y - viewY;
+    if (sx + hw < 0 || sy + hw < 0 || sx - hw > viewW || sy - hw > viewH) {
+      bolts.splice(i, 1);
+      continue;
+    }
+    if (p.friendly) {
+      let hit = -1;
+      for (let e = 0; e < enemies.length; e++) {
+        const box = enemyHitbox(enemies[e]);
+        if (overlaps(p.x - hw, p.y - hw, BOLT_SIZE, BOLT_SIZE, box.x, box.y, box.w, box.h)) {
+          hit = e;
+          break;
+        }
+      }
+      if (hit < 0) {
+        continue;
+      }
+      if (p.damage > 0) {
+        hurtEnemyAt(hit, p.damage);
+      }
+      if (p.freezeMs > 0) {
+        crowdControlAt(p.x, p.y, FROSTBALL_RADIUS, p.freezeMs);
+      }
+      bolts.splice(i, 1);
+    } else {
+      const box = getPlayerHitbox();
+      if (!overlaps(p.x - hw, p.y - hw, BOLT_SIZE, BOLT_SIZE, box.x, box.y, box.w, box.h)) {
+        continue;
+      }
+      if (p.damage > 0) {
+        damagePlayer(p.damage);
+      }
+      if (p.freezeMs > 0) {
+        freezePlayer(p.freezeMs);
+        crowdControlAt(p.x, p.y, FROSTBALL_RADIUS, p.freezeMs);
+      }
+      bolts.splice(i, 1);
     }
   }
 }
@@ -213,6 +560,75 @@ export function drawCombat(ctx: CanvasRenderingContext2D, cameraX: number, camer
     ctx.beginPath();
     ctx.arc(cx, cy, Math.max(1, r - 1), 0, Math.PI * 2);
     ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.lineWidth = 1;
+  for (const nova of novas) {
+    const t = 1 - nova.life / nova.maxLife;
+    const cx = Math.floor(nova.x - cameraX) + 0.5;
+    const cy = Math.floor(nova.y - cameraY) + 0.5;
+    const r = 4 + t * (nova.radius - 4);
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = nova.color;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(1, r - 1), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  const hw = (BOLT_SIZE / 2) | 0;
+  for (const p of bolts) {
+    const sx = Math.floor(p.x - cameraX) - hw;
+    const sy = Math.floor(p.y - cameraY) - hw;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(sx, sy, BOLT_SIZE + 1, BOLT_SIZE + 1);
+    ctx.fillStyle =
+      '#' + RAINBOW_COLORS[p.kind === BOLT_FROST ? 5 : 0].toString(16).padStart(6, '0');
+    ctx.fillRect(sx + 1, sy + 1, BOLT_SIZE - 1, BOLT_SIZE - 1);
+  }
+
+  if (player.shield > 0) {
+    const sx = Math.floor(player.x - cameraX);
+    const sy = Math.floor(player.y - cameraY);
+    const cx = sx + PLAYER_WIDTH / 2;
+    const cy = sy + PLAYER_HEIGHT / 2;
+    ctx.strokeStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(cx, cy, SHIELD_RADIUS, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#a656ff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, SHIELD_RADIUS - 1, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  if (player.frozen > 0) {
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#8df';
+    ctx.fillRect(
+      Math.floor(player.x - cameraX),
+      Math.floor(player.y - cameraY),
+      PLAYER_WIDTH,
+      PLAYER_HEIGHT
+    );
+    ctx.globalAlpha = 1;
+  }
+
+  for (const fx of heals) {
+    const t = 1 - fx.life / HEAL_FX_MS;
+    ctx.globalAlpha = 1 - t;
+    drawText(
+      ctx,
+      '+',
+      Math.floor(fx.x - cameraX - 1),
+      Math.floor(fx.y - cameraY - t * 10),
+      '#08ba00'
+    );
     ctx.globalAlpha = 1;
   }
 }

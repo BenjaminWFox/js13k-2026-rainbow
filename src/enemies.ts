@@ -58,6 +58,12 @@ export interface Enemy {
   kbY: number;
   bobTime: number;
   contactTimer: number;
+  /** Remaining freeze (ms). Frozen entities take +25% damage. */
+  frozen: number;
+  /** Remaining slow (ms). Minibosses/boss get this instead of freeze. */
+  slowed: number;
+  /** True for minibosses and the final boss: CC slows instead of freezing. */
+  boss: boolean;
 }
 
 export const enemies: Enemy[] = [];
@@ -109,7 +115,14 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     const type = enemyTypes[enemy.type];
-    enemy.bobTime += dt;
+    if (enemy.frozen > 0) {
+      enemy.frozen = Math.max(0, enemy.frozen - dt);
+    } else {
+      enemy.bobTime += dt;
+    }
+    if (enemy.slowed > 0) {
+      enemy.slowed = Math.max(0, enemy.slowed - dt);
+    }
     enemy.contactTimer = Math.max(0, enemy.contactTimer - dt);
 
     const centerX = enemy.x + type.hitX + type.hitW / 2;
@@ -156,8 +169,8 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
     }
 
     // Chase: straight toward the player; walls block, pipes don't
-    if (dist > 1) {
-      const step = ENEMY_SPEED * dt;
+    if (dist > 1 && enemy.frozen <= 0) {
+      const step = ENEMY_SPEED * (enemy.slowed > 0 ? 0.5 : 1) * dt;
       const moveX = (towardX / dist) * step;
       const moveY = (towardY / dist) * step;
       if (!hitsWall(enemy.x + type.hitX + moveX, enemy.y + type.hitY, type.hitW, type.hitH)) {
@@ -207,6 +220,9 @@ function trySpawn(playerCenterX: number, playerCenterY: number, radius: number):
       kbY: 0,
       bobTime: Math.random() * BOB_PERIOD_MS,
       contactTimer: 0,
+      frozen: 0,
+      slowed: 0,
+      boss: false,
     });
   }
 }
@@ -354,7 +370,7 @@ export function drawEnemies(
       continue;
     }
     // 1px float bob; the shadow hugs the ground and grows on the "down" frame
-    const down = enemy.bobTime % BOB_PERIOD_MS < BOB_PERIOD_MS / 2;
+    const down = enemy.frozen > 0 || enemy.bobTime % BOB_PERIOD_MS < BOB_PERIOD_MS / 2;
     const shadowW = down ? 5 : 3;
     ctx.fillRect(
       screenX + type.hitX + ((type.hitW - shadowW) >> 1),
@@ -363,6 +379,16 @@ export function drawEnemies(
       1
     );
     ctx.drawImage(type.canvas, screenX, screenY - (down ? 0 : 1));
+    if (enemy.frozen > 0) {
+      ctx.strokeStyle = '#8df';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(
+        screenX + type.hitX + 0.5,
+        screenY + type.hitY - (down ? 0 : 1) + 0.5,
+        type.hitW - 1,
+        type.hitH - 1
+      );
+    }
   }
 }
 
@@ -372,9 +398,30 @@ export function enemyHitbox(enemy: Enemy): { x: number; y: number; w: number; h:
   return { x: enemy.x + type.hitX, y: enemy.y + type.hitY, w: type.hitW, h: type.hitH };
 }
 
+/** Freeze regulars; minibosses/boss are slowed for 2× the duration instead. */
+export function crowdControl(enemy: Enemy, freezeMs: number): void {
+  if (enemy.boss) {
+    enemy.slowed = Math.max(enemy.slowed, freezeMs * 2);
+  } else {
+    enemy.frozen = Math.max(enemy.frozen, freezeMs);
+  }
+}
+
+export function crowdControlAt(x: number, y: number, radius: number, freezeMs: number): void {
+  for (const enemy of enemies) {
+    const box = enemyHitbox(enemy);
+    if (Math.hypot(box.x + box.w / 2 - x, box.y + box.h / 2 - y) <= radius) {
+      crowdControl(enemy, freezeMs);
+    }
+  }
+}
+
 /** Returns true if the enemy died. Safe to call while reverse-iterating `enemies`. */
 export function hurtEnemyAt(index: number, amount: number): boolean {
   const enemy = enemies[index];
+  if (enemy.frozen > 0) {
+    amount *= 1.25;
+  }
   enemy.hp -= amount;
   if (enemy.hp > 0) {
     return false;
