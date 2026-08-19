@@ -3,6 +3,9 @@ import { RAINBOW_COLORS, unlockedColors } from './palette';
 import { level, scrap, scrapSprite, xp, xpNeeded } from './pickups';
 
 const PAD = 4;
+const PAUSE_W = 7;
+const PAUSE_H = 6;
+const PAUSE_PAD = 3;
 const XP_W = 60;
 const XP_INNER_H = 2;
 const SQ = 6;
@@ -43,7 +46,17 @@ function outlinedBar(
   ctx.fillRect(x + 1, y + 1, Math.round(innerW * fill), innerH);
 }
 
-/** Screen-space HUD. Pause click / menu are a later phase. */
+/** Pause icon plus a little extra pad so the tiny glyph is clickable. */
+export function pauseIconContains(x: number, y: number): boolean {
+  return (
+    x >= PAD - PAUSE_PAD &&
+    x < PAD + PAUSE_W + PAUSE_PAD &&
+    y >= PAD - PAUSE_PAD &&
+    y < PAD + PAUSE_H + PAUSE_PAD
+  );
+}
+
+/** Screen-space HUD. */
 export function drawHud(ctx: CanvasRenderingContext2D, viewWidth: number): void {
   if (level !== lastLevel) {
     lastLevel = level;

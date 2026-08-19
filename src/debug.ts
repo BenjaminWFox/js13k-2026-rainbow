@@ -4,7 +4,17 @@ import { enemies, enemyHitbox, spawnBurst } from './enemies';
 import { wasPressed } from './input';
 import { bakeTiles, getTile, getTileSolid, TILE_WALL } from './map';
 import { unlockedColors } from './palette';
-import { CRYSTAL_H, CRYSTAL_W, level, pickups, SCRAP_H, SCRAP_W, scrap, xp } from './pickups';
+import {
+  addXp,
+  CRYSTAL_H,
+  CRYSTAL_W,
+  level,
+  pickups,
+  SCRAP_H,
+  SCRAP_W,
+  scrap,
+  xp,
+} from './pickups';
 import { pipePieces } from './pipes';
 import { getPlayerHitbox, player } from './player';
 import { createSprite, rebakeAllSprites } from './sprites';
@@ -87,7 +97,7 @@ export function initDebugProps(): void {
 
 /**
  * Keys 1-7 toggle rainbow unlocks; 8 toggles hitbox outlines; 9 burst-spawns
- * 50 enemies; 0 restores full HP. Dev-only.
+ * 50 enemies; 0 restores full HP; X grants 5 XP. Dev-only.
  */
 export function handleDebugKeys(): void {
   for (let i = 0; i < 7; i++) {
@@ -105,6 +115,9 @@ export function handleDebugKeys(): void {
   }
   if (wasPressed('Digit0')) {
     player.hp = player.maxHp;
+  }
+  if (wasPressed('KeyX')) {
+    addXp(5);
   }
 }
 
@@ -226,7 +239,7 @@ export function drawDebugOverlay(
   ctx.fillStyle = '#fff';
   ctx.font = '5px monospace';
   ctx.fillText(
-    'wasd/arrows: move / 1-7: colors / 8: hitboxes / 9: +50 / 0: heal   enemies: ' +
+    'wasd/arrows: move / 1-7: colors / 8: hitboxes / 9: +50 / 0: heal / x: +xp   enemies: ' +
       enemies.length +
       ' hp: ' +
       player.hp +

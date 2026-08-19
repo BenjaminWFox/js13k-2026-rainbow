@@ -86,6 +86,11 @@ export function bakeEnemyTypes(): void {
 let spawnTimer = 0;
 let lastSpawnRadius = 200;
 
+export function resetEnemies(): void {
+  enemies.length = 0;
+  spawnTimer = 0;
+}
+
 export function updateEnemies(dt: number, viewWidth: number, viewHeight: number): void {
   const spawnRadius = Math.hypot(viewWidth, viewHeight) / 2 + SPAWN_MARGIN;
   lastSpawnRadius = spawnRadius;

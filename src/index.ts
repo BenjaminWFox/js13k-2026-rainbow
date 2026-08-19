@@ -16,6 +16,14 @@ import { drawExplosions, updateExplosions } from './fx';
 import { bakeHud, drawHud } from './hud';
 import { clearPressedKeys, initInput } from './input';
 import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
+import {
+  drawOverlays,
+  initOverlays,
+  isWorldFrozen,
+  SCENE_RUN,
+  scene,
+  updateOverlays,
+} from './overlays';
 import { bakePickups, drawPickups, updatePickups } from './pickups';
 import { generatePipes, pipePieces, portalBacks, portalFronts } from './pipes';
 import { player, updatePlayer } from './player';
@@ -60,7 +68,8 @@ async function main(): Promise<void> {
   generateMap();
   bakeTiles();
   generatePipes(1);
-  initInput();
+  initInput(canvas);
+  initOverlays();
   if (import.meta.env.DEV) {
     debug = await import('./debug');
     debug.initDebugProps();
@@ -80,11 +89,14 @@ function gameLoop(time: number): void {
   if (debug) {
     debug.handleDebugKeys();
   }
-  updatePlayer(dt);
-  updateCombat(dt);
-  updateEnemies(dt, viewWidth, viewHeight);
-  updatePickups(dt);
-  updateExplosions(dt);
+  updateOverlays(viewWidth, viewHeight);
+  if (!isWorldFrozen()) {
+    updatePlayer(dt);
+    updateCombat(dt);
+    updateEnemies(dt, viewWidth, viewHeight);
+    updatePickups(dt);
+    updateExplosions(dt);
+  }
   render();
   clearPressedKeys();
 }
@@ -142,19 +154,21 @@ function render(): void {
   drawCombat(ctx, cameraX, cameraY);
   drawExplosions(ctx, cameraX, cameraY, viewWidth, viewHeight);
 
-  // HP bar: white 1px inner bar in a 1px black outline, outline top 1px below
-  // the sprite; inner width = % of HP
-  ctx.fillStyle = '#000';
-  ctx.fillRect(playerScreenX, playerScreenY + PLAYER_HEIGHT + 1, PLAYER_WIDTH, 3);
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(
-    playerScreenX + 1,
-    playerScreenY + PLAYER_HEIGHT + 2,
-    Math.round((PLAYER_WIDTH - 2) * (player.hp / player.maxHp)),
-    1
-  );
-
-  drawHud(ctx, viewWidth);
+  if (scene === SCENE_RUN) {
+    // HP bar: white 1px inner bar in a 1px black outline, outline top 1px below
+    // the sprite; inner width = % of HP
+    ctx.fillStyle = '#000';
+    ctx.fillRect(playerScreenX, playerScreenY + PLAYER_HEIGHT + 1, PLAYER_WIDTH, 3);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(
+      playerScreenX + 1,
+      playerScreenY + PLAYER_HEIGHT + 2,
+      Math.round((PLAYER_WIDTH - 2) * (player.hp / player.maxHp)),
+      1
+    );
+    drawHud(ctx, viewWidth);
+  }
+  drawOverlays(ctx, viewWidth, viewHeight);
 
   if (debug) {
     debug.drawDebugOverlay(

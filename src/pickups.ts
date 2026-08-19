@@ -26,12 +26,14 @@ interface Pickup {
 
 export const pickups: Pickup[] = [];
 
-/** In-run XP remainder toward the next level. Level-up overlay lands later. */
+/** In-run XP remainder toward the next level. */
 export let xp = 0;
-/** Starts at 1; auto-increments when the bar fills (overlay will intercept later). */
+/** Starts at 1; increments when the bar fills (one queued overlay per wrap). */
 export let level = 1;
 /** Magneted scrap this session; persistence lands with the shop. */
 export let scrap = 0;
+/** Level-ups waiting for the overlay queue. */
+export let pendingLevelUps = 0;
 
 let crystalSprite: HTMLCanvasElement;
 export let scrapSprite: HTMLCanvasElement;
@@ -41,12 +43,30 @@ export function xpNeeded(): number {
   return 5 * level;
 }
 
-function addXp(amount: number): void {
+export function addXp(amount: number): void {
   xp += amount;
   while (xp >= xpNeeded()) {
     xp -= xpNeeded();
     level++;
+    pendingLevelUps++;
   }
+}
+
+/** True if a level-up overlay should open. */
+export function consumeLevelUp(): boolean {
+  if (pendingLevelUps <= 0) {
+    return false;
+  }
+  pendingLevelUps--;
+  return true;
+}
+
+/** Clears ground pickups and XP. Magneted scrap is kept. */
+export function resetPickups(): void {
+  pickups.length = 0;
+  xp = 0;
+  level = 1;
+  pendingLevelUps = 0;
 }
 
 export function bakePickups(): void {

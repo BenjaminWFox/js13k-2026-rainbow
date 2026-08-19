@@ -440,7 +440,7 @@ For the wave effect (color returning outward from a destroyed pipe), the working
 
 No font lives on the sprite sheet. Text uses a **bit-packed 3×5 pixel font**:
 
-- Glyphs: A–Z, 0–9, and the punctuation the UI needs (`, . ! ? ' -`). Each glyph is
+- Glyphs: A–Z, 0–9, and the punctuation the UI needs (`, . ! ? ' - +`). Each glyph is
   3×5 = **15 bits, one packed integer per glyph**, stored in a string/array. Roadroller
   compresses this data extremely well.
 - A tiny renderer draws glyphs with per-pixel `fillRect` at any tint color and integer
@@ -665,14 +665,14 @@ self-contained work any competent model can execute from this spec.
 
 Already built (no work needed): bake engine, palette/desaturation, pipes, world slices +
 plaza, camera, player movement/collision (§3), swarm core, starting-kit combat, packed
-font + HUD.
+font + HUD, menu/overlay framework (pause, level-up draft, stats).
 
 | Phase | Work | Model | Why | Complete |
 |-------|------|-------|-----|----------|
 | 1 | **Swarm core:** spawn ring/rate/cap, teleport-back/despawn, chase movement, float bob + shadow, spatial-grid separation, contact damage, player HP + under-player HP bar | Flagship | Performance under a 150-enemy cap and the most interlocking rules in the game; everything else sits on top of it | ✅ |
 | 2 | **Starting-kit combat:** horn, stomp + knockback, enemy HP/death, pixel explosion, crystal/scrap drops, magnet + pickup | Capable | Fully specified, self-contained math; makes the game playable end-to-end early | ✅ |
 | 3 | **Packed font + HUD:** font renderer + label baking, XP bar, "Level #", scrap counter, color squares, pause icon | Capable | Well-bounded; unblocks every later text UI | ✅ |
-| 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere | |
+| 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere | ✅ |
 | 5 | **Powers:** all 7 color powers, projectiles, freeze/slow, WIS scaling, stack rule | Flagship | Seven abilities sharing targeting/cooldown/freeze machinery; minibosses reuse these | |
 | 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | |
 | 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework | |
@@ -682,8 +682,9 @@ font + HUD.
 
 Notes:
 
-- Phase 4 is next. The pause icon is drawn; click/key → pause menu, and intercepting
-  XP wrap for the level-up overlay, are phase-4 work. Placeholder XP curve is
+- Phase 5 is next. The overlay queue (`enqueueOverlay`) and card/menu widget are
+  ready for pipe-unlock, shop, and death/win screens. Title currently has Start
+  only; Upgrades/shop ranks land in phase 7. Placeholder XP curve is
   `5 * current level` crystals until tuning.
 - Audio (phase 10) stays deferred per §2; drop stretch items before shop rows per the
   §1 fallback ladder.

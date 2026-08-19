@@ -33,6 +33,10 @@ export function spawnExplosion(x: number, y: number, color: number, count = 10):
   }
 }
 
+export function resetExplosions(): void {
+  particles.length = 0;
+}
+
 export function updateExplosions(dt: number): void {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];

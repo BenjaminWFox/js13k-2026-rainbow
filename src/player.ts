@@ -10,6 +10,7 @@ import { spawnExplosion } from './fx';
 import { isDown } from './input';
 import { getTileSolid } from './map';
 import { pipePieces } from './pipes';
+import { CON_HP_PER_RANK, STAT_CON, STAT_DEX, totalStat } from './stats';
 
 export const player = {
   // Top-left corner of the player sprite, world-space pixels
@@ -19,7 +20,7 @@ export const player = {
   faceX: 1,
   faceY: 0,
   moving: false,
-  // Baseline 100 HP; CON / shop Start HP raise the max in later phases
+  // Baseline 100 HP; CON raises the max, shop Start HP lands later
   hp: 100,
   maxHp: 100,
 };
@@ -29,6 +30,7 @@ export function damagePlayer(amount: number): void {
   if (amount <= 0 || player.hp <= 0) {
     return;
   }
+  amount *= 1 - 0.1 * totalStat(STAT_DEX);
   const hit = getPlayerHitbox();
   const cx = hit.x + hit.w / 2;
   const cy = hit.y + hit.h / 2;
@@ -43,6 +45,19 @@ let lastDiagX = 1;
 let lastDiagY = 0;
 /** -1 = no pending diagonal; 0 = currently diagonal; >0 = ms since leaving a diagonal. */
 let diagGrace = -1;
+
+export function resetPlayer(): void {
+  player.x = (MAP_WIDTH / 2) * TILE_SIZE;
+  player.y = (MAP_HEIGHT / 2) * TILE_SIZE;
+  player.faceX = 1;
+  player.faceY = 0;
+  player.moving = false;
+  player.maxHp = 100 + CON_HP_PER_RANK * totalStat(STAT_CON);
+  player.hp = player.maxHp;
+  lastDiagX = 1;
+  lastDiagY = 0;
+  diagGrace = -1;
+}
 
 export function updatePlayer(dt: number): void {
   let dx = 0;

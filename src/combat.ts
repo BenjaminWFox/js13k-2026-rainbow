@@ -1,6 +1,7 @@
 import { PLAYER_HEIGHT, PLAYER_WIDTH } from './constants';
 import { applyKnockback, enemies, enemyHitbox, hurtEnemyAt } from './enemies';
 import { getPlayerHitbox, player } from './player';
+import { kitDamage, POWER_HORN, POWER_STOMP, powerCooldown } from './stats';
 
 // Combat numbers are TBD; placeholders until the tuning phase.
 const HORN_COOLDOWN_MS = 650;
@@ -88,12 +89,19 @@ export function updateCombat(dt: number): void {
 
   if (hornTimer <= 0) {
     fireHorn();
-    hornTimer += HORN_COOLDOWN_MS;
+    hornTimer += powerCooldown(HORN_COOLDOWN_MS, POWER_HORN);
   }
   if (stompTimer <= 0) {
     fireStomp();
-    stompTimer += STOMP_COOLDOWN_MS;
+    stompTimer += powerCooldown(STOMP_COOLDOWN_MS, POWER_STOMP);
   }
+}
+
+export function resetCombat(): void {
+  hornTimer = 0;
+  stompTimer = 0;
+  hornFlash = 0;
+  stompFlash = 0;
 }
 
 function fireHorn(): void {
@@ -116,17 +124,15 @@ function fireHorn(): void {
       : player.faceY < 0
         ? player.y
         : player.y + PLAYER_HEIGHT / 2;
-  const boxBackX =
-    player.faceX > 0 ? box.x : player.faceX < 0 ? box.x + box.w : box.x + box.w / 2;
-  const boxBackY =
-    player.faceY > 0 ? box.y : player.faceY < 0 ? box.y + box.h : box.y + box.h / 2;
+  const boxBackX = player.faceX > 0 ? box.x : player.faceX < 0 ? box.x + box.w : box.x + box.w / 2;
+  const boxBackY = player.faceY > 0 ? box.y : player.faceY < 0 ? box.y + box.h : box.y + box.h / 2;
   hornFrom.x = (boxBackX + spriteFrontX) / 2;
   hornFrom.y = (boxBackY + spriteFrontY) / 2;
   hornFlash = HORN_FLASH_MS;
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemyHitbox(enemies[i]);
     if (overlaps(hornBox.x, hornBox.y, hornBox.w, hornBox.h, enemy.x, enemy.y, enemy.w, enemy.h)) {
-      hurtEnemyAt(i, HORN_DAMAGE);
+      hurtEnemyAt(i, kitDamage(HORN_DAMAGE, POWER_HORN));
     }
   }
 }
@@ -141,7 +147,7 @@ function fireStomp(): void {
     if (Math.hypot(ex - center.x, ey - center.y) > STOMP_RADIUS) {
       continue;
     }
-    if (!hurtEnemyAt(i, STOMP_DAMAGE)) {
+    if (!hurtEnemyAt(i, kitDamage(STOMP_DAMAGE, POWER_STOMP))) {
       applyKnockback(enemies[i], center.x, center.y, STOMP_KNOCKBACK);
     }
   }
