@@ -4,7 +4,7 @@ import { enemies, enemyHitbox, spawnBurst } from './enemies';
 import { wasPressed } from './input';
 import { bakeTiles, getTile, getTileSolid, TILE_WALL } from './map';
 import { unlockedColors } from './palette';
-import { CRYSTAL_H, CRYSTAL_W, pickups, SCRAP_H, SCRAP_W, scrap, xp } from './pickups';
+import { CRYSTAL_H, CRYSTAL_W, level, pickups, SCRAP_H, SCRAP_W, scrap, xp } from './pickups';
 import { pipePieces } from './pipes';
 import { getPlayerHitbox, player } from './player';
 import { createSprite, rebakeAllSprites } from './sprites';
@@ -232,6 +232,8 @@ export function drawDebugOverlay(
       player.hp +
       ' xp: ' +
       xp +
+      ' lv: ' +
+      level +
       ' scrap: ' +
       scrap,
     3,

@@ -352,12 +352,12 @@ guards/steals.
 - **Player HP bar:** beneath the player sprite — white inner bar 1px high, outlined on
   all sides by 1px black; top of the outline 1px below the sprite; inner width = % of HP.
 - **XP bar:** top-center, **60px** wide, same style but **2px-high** white inner bar.
-  Text **"Level #"** to its right.
+  Text **"Level #"** to its right, on a **solid black plate** (1px pad around the glyphs).
 - **Color indicator:** beneath the XP bar, **7 squares** — 4×4 interior with a 1px black
   outline. Interior is **grey until that color is released**, then filled with its
   rainbow color.
-- **Scrap counter:** top-right — the collected amount formatted `##,###`, followed by the
-  scrap sprite.
+- **Scrap counter:** top-right — the collected amount formatted `##,###` on a **solid
+  black plate** (1px pad), followed by the scrap sprite.
 - **Pause icon:** **top-left** — two white 1×4 vertical bars, each with a 1px black
   outline, 1px gap between them. Clicking it (or a pause key) opens a menu with
   **Resume** and **Quit to Menu**.
@@ -664,13 +664,14 @@ performance-sensitive tradeoffs, or design judgment). "Capable" = well-specified
 self-contained work any competent model can execute from this spec.
 
 Already built (no work needed): bake engine, palette/desaturation, pipes, world slices +
-plaza, camera, player movement/collision (§3).
+plaza, camera, player movement/collision (§3), swarm core, starting-kit combat, packed
+font + HUD.
 
 | Phase | Work | Model | Why | Complete |
 |-------|------|-------|-----|----------|
 | 1 | **Swarm core:** spawn ring/rate/cap, teleport-back/despawn, chase movement, float bob + shadow, spatial-grid separation, contact damage, player HP + under-player HP bar | Flagship | Performance under a 150-enemy cap and the most interlocking rules in the game; everything else sits on top of it | ✅ |
 | 2 | **Starting-kit combat:** horn, stomp + knockback, enemy HP/death, pixel explosion, crystal/scrap drops, magnet + pickup | Capable | Fully specified, self-contained math; makes the game playable end-to-end early | ✅ |
-| 3 | **Packed font + HUD:** font renderer + label baking, XP bar, "Level #", scrap counter, color squares, pause icon | Capable | Well-bounded; unblocks every later text UI | |
+| 3 | **Packed font + HUD:** font renderer + label baking, XP bar, "Level #", scrap counter, color squares, pause icon | Capable | Well-bounded; unblocks every later text UI | ✅ |
 | 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere | |
 | 5 | **Powers:** all 7 color powers, projectiles, freeze/slow, WIS scaling, stack rule | Flagship | Seven abilities sharing targeting/cooldown/freeze machinery; minibosses reuse these | |
 | 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | |
@@ -681,6 +682,8 @@ plaza, camera, player movement/collision (§3).
 
 Notes:
 
-- Phase 3 can start immediately (it was independent of phase 2).
+- Phase 4 is next. The pause icon is drawn; click/key → pause menu, and intercepting
+  XP wrap for the level-up overlay, are phase-4 work. Placeholder XP curve is
+  `5 * current level` crystals until tuning.
 - Audio (phase 10) stays deferred per §2; drop stretch items before shop rows per the
   §1 fallback ladder.

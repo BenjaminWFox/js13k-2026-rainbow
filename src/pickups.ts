@@ -26,13 +26,28 @@ interface Pickup {
 
 export const pickups: Pickup[] = [];
 
-/** In-run XP; level-up UI lands in a later phase. */
+/** In-run XP remainder toward the next level. Level-up overlay lands later. */
 export let xp = 0;
+/** Starts at 1; auto-increments when the bar fills (overlay will intercept later). */
+export let level = 1;
 /** Magneted scrap this session; persistence lands with the shop. */
 export let scrap = 0;
 
 let crystalSprite: HTMLCanvasElement;
-let scrapSprite: HTMLCanvasElement;
+export let scrapSprite: HTMLCanvasElement;
+
+/** Placeholder curve until the tuning phase. */
+export function xpNeeded(): number {
+  return 5 * level;
+}
+
+function addXp(amount: number): void {
+  xp += amount;
+  while (xp >= xpNeeded()) {
+    xp -= xpNeeded();
+    level++;
+  }
+}
 
 export function bakePickups(): void {
   crystalSprite = createSprite(89, 0, CRYSTAL_W, CRYSTAL_H);
@@ -87,7 +102,7 @@ export function updatePickups(dt: number): void {
 
     if (p.x < hit.x + hit.w && p.x + pw > hit.x && p.y < hit.y + hit.h && p.y + ph > hit.y) {
       if (p.kind === PICKUP_CRYSTAL) {
-        xp += 1;
+        addXp(1);
       } else {
         scrap += 1;
       }

@@ -13,6 +13,7 @@ import {
 } from './constants';
 import { bakeEnemyTypes, drawEnemies, updateEnemies } from './enemies';
 import { drawExplosions, updateExplosions } from './fx';
+import { bakeHud, drawHud } from './hud';
 import { clearPressedKeys, initInput } from './input';
 import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
 import { bakePickups, drawPickups, updatePickups } from './pickups';
@@ -54,6 +55,7 @@ async function main(): Promise<void> {
   playerSprite = createSprite(PLAYER_SPRITE_X, PLAYER_SPRITE_Y, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
   bakeEnemyTypes();
   bakePickups();
+  bakeHud();
 
   generateMap();
   bakeTiles();
@@ -151,6 +153,8 @@ function render(): void {
     Math.round((PLAYER_WIDTH - 2) * (player.hp / player.maxHp)),
     1
   );
+
+  drawHud(ctx, viewWidth);
 
   if (debug) {
     debug.drawDebugOverlay(
