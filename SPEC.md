@@ -666,21 +666,21 @@ self-contained work any competent model can execute from this spec.
 Already built (no work needed): bake engine, palette/desaturation, pipes, world slices +
 plaza, camera, player movement/collision (§3).
 
-| Phase | Work | Model | Why |
-|-------|------|-------|-----|
-| 1 | **Swarm core:** spawn ring/rate/cap, teleport-back/despawn, chase movement, float bob + shadow, spatial-grid separation, contact damage, player HP + under-player HP bar | Flagship | Performance under a 150-enemy cap and the most interlocking rules in the game; everything else sits on top of it |
-| 2 | **Starting-kit combat:** horn, stomp + knockback, enemy HP/death, pixel explosion, crystal/scrap drops, magnet + pickup | Capable | Fully specified, self-contained math; makes the game playable end-to-end early |
-| 3 | **Packed font + HUD:** font renderer + label baking, XP bar, "Level #", scrap counter, color squares, pause icon | Capable | Well-bounded; unblocks every later text UI |
-| 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere |
-| 5 | **Powers:** all 7 color powers, projectiles, freeze/slow, WIS scaling, stack rule | Flagship | Seven abilities sharing targeting/cooldown/freeze machinery; minibosses reuse these |
-| 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project |
-| 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework |
-| 8 | **Final boss + finale:** plaza portal, all-powers boss, map-wide pursuit, win state | Capable | Reuses phase-5 powers and phase-6 patterns; numbers are specified |
-| 9 | **Opening cutscene + dialogue UI:** panel component, scripted choreography, skip | Flagship | Scripted movement + sequenced pipe/color drain under tight bytes; first candidate on the fallback ladder, so cost judgment matters |
-| 10 | **Tuning + stretch + ship:** balance numbers (the §5 TBDs), surge spawns, difficulty modes, audio, final golfing | Flagship | Playtest judgment and byte-tradeoff calls per Rule 5 |
+| Phase | Work | Model | Why | Complete |
+|-------|------|-------|-----|----------|
+| 1 | **Swarm core:** spawn ring/rate/cap, teleport-back/despawn, chase movement, float bob + shadow, spatial-grid separation, contact damage, player HP + under-player HP bar | Flagship | Performance under a 150-enemy cap and the most interlocking rules in the game; everything else sits on top of it | ✅ |
+| 2 | **Starting-kit combat:** horn, stomp + knockback, enemy HP/death, pixel explosion, crystal/scrap drops, magnet + pickup | Capable | Fully specified, self-contained math; makes the game playable end-to-end early | ✅ |
+| 3 | **Packed font + HUD:** font renderer + label baking, XP bar, "Level #", scrap counter, color squares, pause icon | Capable | Well-bounded; unblocks every later text UI | |
+| 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere | |
+| 5 | **Powers:** all 7 color powers, projectiles, freeze/slow, WIS scaling, stack rule | Flagship | Seven abilities sharing targeting/cooldown/freeze machinery; minibosses reuse these | |
+| 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | |
+| 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework | |
+| 8 | **Final boss + finale:** plaza portal, all-powers boss, map-wide pursuit, win state | Capable | Reuses phase-5 powers and phase-6 patterns; numbers are specified | |
+| 9 | **Opening cutscene + dialogue UI:** panel component, scripted choreography, skip | Flagship | Scripted movement + sequenced pipe/color drain under tight bytes; first candidate on the fallback ladder, so cost judgment matters | |
+| 10 | **Tuning + stretch + ship:** balance numbers (the §5 TBDs), surge spawns, difficulty modes, audio, final golfing | Flagship | Playtest judgment and byte-tradeoff calls per Rule 5 | |
 
 Notes:
 
-- Phases 2 and 3 are independent of each other and can run in parallel after phase 1.
+- Phase 3 can start immediately (it was independent of phase 2).
 - Audio (phase 10) stays deferred per §2; drop stretch items before shop rows per the
   §1 fallback ladder.
