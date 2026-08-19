@@ -1,5 +1,6 @@
 import { primeFinalePowers, resetCombat } from './combat';
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
+import { startCutscene } from './cutscene';
 import {
   killOnScreenRegulars,
   resetEnemies,
@@ -41,6 +42,7 @@ import { closeUi, drawUi, isUiOpen, openCards, openMenu, updateUi } from './ui';
 
 export const SCENE_TITLE = 0;
 export const SCENE_RUN = 1;
+export const SCENE_CUTSCENE = 2;
 
 export let scene = SCENE_TITLE;
 
@@ -93,7 +95,10 @@ function startRun(): void {
   closeUi();
   overlayQueue.length = 0;
   resetRun();
-  scene = SCENE_RUN;
+  scene = SCENE_CUTSCENE;
+  startCutscene(() => {
+    scene = SCENE_RUN;
+  });
 }
 
 function quitToTitle(): void {

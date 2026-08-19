@@ -11,6 +11,7 @@ import {
   TARGET_VIEW_HEIGHT,
   TILE_SIZE,
 } from './constants';
+import { drawCutsceneUi, drawCutsceneWorld, updateCutscene } from './cutscene';
 import { bakeEnemyTypes, drawEnemies, updateEnemies } from './enemies';
 import { drawExplosions, updateExplosions } from './fx';
 import { bakeHud, drawHud } from './hud';
@@ -22,6 +23,7 @@ import {
   initOverlays,
   isSequenceActive,
   isWorldFrozen,
+  SCENE_CUTSCENE,
   SCENE_RUN,
   scene,
   startPendingDeathSequence,
@@ -94,7 +96,9 @@ function gameLoop(time: number): void {
     debug.handleDebugKeys();
   }
   updateOverlays(viewWidth, viewHeight);
-  if (!isWorldFrozen()) {
+  if (scene === SCENE_CUTSCENE) {
+    updateCutscene(dt);
+  } else if (!isWorldFrozen()) {
     if (isSequenceActive()) {
       updateSequence(dt);
     } else {
@@ -147,18 +151,22 @@ function render(): void {
 
   drawPickups(ctx, cameraX, cameraY, viewWidth, viewHeight);
 
-  for (const piece of portalBacks) {
-    ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
-  }
+  if (scene === SCENE_CUTSCENE) {
+    drawCutsceneWorld(ctx, cameraX, cameraY);
+  } else {
+    for (const piece of portalBacks) {
+      ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
+    }
 
-  for (const piece of pipePieces) {
-    ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
-  }
+    for (const piece of pipePieces) {
+      ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
+    }
 
-  drawEnemies(ctx, cameraX, cameraY, viewWidth, viewHeight);
+    drawEnemies(ctx, cameraX, cameraY, viewWidth, viewHeight);
 
-  for (const piece of portalFronts) {
-    ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
+    for (const piece of portalFronts) {
+      ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
+    }
   }
 
   const playerScreenX = Math.floor(player.x - cameraX);
@@ -182,6 +190,9 @@ function render(): void {
       1
     );
     drawHud(ctx, viewWidth);
+  }
+  if (scene === SCENE_CUTSCENE) {
+    drawCutsceneUi(ctx, viewWidth, viewHeight);
   }
   drawOverlays(ctx, viewWidth, viewHeight);
 

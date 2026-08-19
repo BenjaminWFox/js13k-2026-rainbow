@@ -44,6 +44,11 @@ export function wasPressed(code: string): boolean {
   return pressedKeys.has(code);
 }
 
+/** True if any key went down this frame (cutscene advance/skip). */
+export function anyKeyPressed(): boolean {
+  return pressedKeys.size > 0;
+}
+
 /** Call once at the end of every frame. */
 export function clearPressedKeys(): void {
   pressedKeys.clear();

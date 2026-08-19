@@ -681,16 +681,26 @@ projectiles + freeze, minibosses + pipe destruction + color wave.
 | 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | ✅ |
 | 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework | ✅ |
 | 8 | **Final boss + finale:** plaza portal, all-powers boss, map-wide pursuit, win state | Capable | Reuses phase-5 powers and phase-6 patterns; numbers are specified | ✅ |
-| 9 | **Opening cutscene + dialogue UI:** panel component, scripted choreography, skip | Flagship | Scripted movement + sequenced pipe/color drain under tight bytes; first candidate on the fallback ladder, so cost judgment matters | |
+| 9 | **Opening cutscene + dialogue UI:** panel component, scripted choreography, skip | Flagship | Scripted movement + sequenced pipe/color drain under tight bytes; first candidate on the fallback ladder, so cost judgment matters | ✅ |
 | 10 | **Tuning + stretch + ship:** balance numbers (the §5 TBDs), surge spawns, difficulty modes, audio, final golfing | Flagship | Playtest judgment and byte-tradeoff calls per Rule 5 | |
 
 Notes:
 
-- Phase 9 is next. Opening cutscene + dialogue UI still skipped: Start
-  jumps straight into the greyscale run. Shop prices, Start HP / Start
-  Speed amounts, revive HP/i-frames, and other combat numbers remain
-  placeholders until the tuning phase. Debug: 1–7 toggle palette +
-  powers without killing minibosses; F unlocks all colors and starts
-  the finale; C grants scrap; K sets HP to 0.
+- Phase 10 is next. Cutscene (`src/cutscene.ts`) plays on every Start:
+  colored world, plaza portal fade-in, boss walk-out, two boss panels,
+  seven minibosses marching off, pipes appearing colorless (a spare
+  grey-stripe pipe kit) then activating one-by-one with instant per-color
+  drains (no reverse wave — cheaper), closing shard panel. Any key/click
+  advances a panel; during choreography it skips to the greyscale run
+  start. Dialogue panel = framed speaker sprite + word-wrapped packed-font
+  lines.
+- **Size:** 13,460 B zipped — 148 B over the cap (phase 9 cost 985 B, inside
+  its §1 budget; audio still unreserved). Phase 10 must golf and spend from
+  the §1 fallback ladder.
+- Shop prices, Start HP / Start Speed amounts, revive HP/i-frames, and
+  other combat numbers remain placeholders until the tuning phase.
+  Debug: 1–7 toggle palette + powers without killing minibosses; F
+  unlocks all colors and starts the finale; C grants scrap; K sets HP
+  to 0.
 - Audio (phase 10) stays deferred per §2; drop stretch items before shop rows per the
   §1 fallback ladder.

@@ -98,8 +98,9 @@ export const enemies: Enemy[] = [];
 // Tiers allowed to spawn; each destroyed pipe unlocks the next type
 let unlockedTiers = 1;
 
-const minibossSprites: HTMLCanvasElement[] = [];
-let finalBossSprite: HTMLCanvasElement | undefined;
+/** Shared Business Man bakes, eyes tinted per color — also cutscene actors. */
+export const minibossSprites: HTMLCanvasElement[] = [];
+export let finalBossSprite: HTMLCanvasElement | undefined;
 
 const miniHit = {
   hitX: 0,

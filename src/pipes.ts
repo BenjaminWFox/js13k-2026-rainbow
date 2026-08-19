@@ -94,6 +94,9 @@ interface PipeKit {
 
 const kits: PipeKit[] = [];
 
+/** Colorless twin (stripe left `b1b1b1`) of every colored kit canvas. */
+const greyTwin = new Map<HTMLCanvasElement, HTMLCanvasElement>();
+
 let portalLeft: HTMLCanvasElement;
 let portalRight: HTMLCanvasElement;
 let portalLeftFlip: HTMLCanvasElement;
@@ -283,10 +286,33 @@ function bakeKit(color: number): PipeKit {
   return { straightH, straightV, curves, caps };
 }
 
+/** Every canvas in a kit, in a stable order shared by all kits. */
+function kitCanvasList(kit: PipeKit): HTMLCanvasElement[] {
+  return [
+    ...kit.straightH,
+    ...kit.straightV,
+    ...kit.curves.map((c) => c.canvas),
+    ...kit.caps[DIR_E],
+    ...kit.caps[DIR_N],
+    ...kit.caps[DIR_W],
+    ...kit.caps[DIR_S],
+  ];
+}
+
+/** The colorless twin of a pipe canvas (cutscene pipes before they activate). */
+export function greyPipeCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  return greyTwin.get(canvas) ?? canvas;
+}
+
 function bakePieces(): void {
   if (!kits.length) {
     for (let i = 0; i < 7; i++) {
       kits.push(bakeKit(RAINBOW_COLORS[i]));
+    }
+    // Remapping the stripe to itself keeps it neutral grey: a colorless kit
+    const greyList = kitCanvasList(bakeKit(PIPE_STRIPE));
+    for (const kit of kits) {
+      kitCanvasList(kit).forEach((canvas, i) => greyTwin.set(canvas, greyList[i]));
     }
   }
   if (!portalLeft) {
@@ -722,17 +748,31 @@ export function generatePipes(seed: number): void {
 }
 
 /**
- * Open the plaza portal on the right rim of the hub, facing west into the
- * plaza. Returns the boss stand position just inside the plaza.
+ * The plaza portal's two slabs (right rim of the hub, facing west into the
+ * plaza). The cutscene draws these itself so it can fade them and put actors
+ * between the back and front slab.
  */
-export function spawnPlazaPortal(): { x: number; y: number } {
+export function plazaPortalParts(): { back: PipePiece; front: PipePiece } {
   const hub = hubRadiusTiles(0) * TILE_SIZE;
   const portalX = CENTER_X + hub - PORTAL_W * 0.4;
   const portalY = CENTER_Y - PORTAL_H / 2;
-  pushPortal(portalX, portalY, false);
   return {
-    x: portalX - PLAYER_WIDTH - 4,
-    y: portalY + PORTAL_H - PLAYER_HEIGHT,
+    back: { canvas: portalRightFlip, x: portalX, y: portalY },
+    front: { canvas: portalLeftFlip, x: portalX + PORTAL_LEFT.w, y: portalY },
+  };
+}
+
+/**
+ * Open the plaza portal permanently (finale). Returns the boss stand
+ * position just inside the plaza.
+ */
+export function spawnPlazaPortal(): { x: number; y: number } {
+  const { back, front } = plazaPortalParts();
+  portalBacks.push(back);
+  portalFronts.push(front);
+  return {
+    x: back.x - PLAYER_WIDTH - 4,
+    y: back.y + PORTAL_H - PLAYER_HEIGHT,
   };
 }
 
