@@ -556,9 +556,9 @@ difficulty ladder in §2 — map sheet index → difficulty tier in code.
 
 | Sprite | Origin | Size | Notes |
 |--------|--------|------|-------|
-| Crystal | (89,0) | 2×4 | In-run XP pickup |
-| Scrap | (92,0) | 4×4 | Meta-currency pickup; also drawn in the HUD counter |
-| Prismatic Shard | (96,0) | 7×11 | Cutscene narrator; hovers at world center |
+| Crystal | (89,0) | 4×6 | In-run XP pickup |
+| Scrap | (93,0) | 6×6 | Meta-currency pickup; also drawn in the HUD counter |
+| Prismatic Shard | (99,0) | 7×11 | Cutscene narrator; hovers at world center |
 
 #### Pipes + flowers (lower strip from y=9)
 

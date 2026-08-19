@@ -12,10 +12,10 @@ const SCRAP_CHANCE = 0.2;
 const MAGNET_RADIUS = PLAYER_WIDTH * 2;
 const PULL_SPEED = PLAYER_SPEED * 1.5;
 const MAGNET_DELAY_MS = 500;
-const CRYSTAL_W = 2;
-const CRYSTAL_H = 4;
-const SCRAP_W = 4;
-const SCRAP_H = 4;
+export const CRYSTAL_W = 4;
+export const CRYSTAL_H = 6;
+export const SCRAP_W = 6;
+export const SCRAP_H = 6;
 
 interface Pickup {
   x: number;
@@ -36,7 +36,7 @@ let scrapSprite: HTMLCanvasElement;
 
 export function bakePickups(): void {
   crystalSprite = createSprite(89, 0, CRYSTAL_W, CRYSTAL_H);
-  scrapSprite = createSprite(92, 0, SCRAP_W, SCRAP_H);
+  scrapSprite = createSprite(93, 0, SCRAP_W, SCRAP_H);
 }
 
 /** Independent crystal/scrap rolls at a world point (usually an enemy center). */
