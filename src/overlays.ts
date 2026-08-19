@@ -1,19 +1,26 @@
 import { resetCombat } from './combat';
-import { resetEnemies } from './enemies';
-import { resetExplosions } from './fx';
+import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
+import { killOnScreenRegulars, resetEnemies, takeSlainMiniboss, unlockNextTier } from './enemies';
+import { resetExplosions, spawnExplosion } from './fx';
 import { pauseIconContains } from './hud';
 import { mouse, wasPressed } from './input';
-import { bakeTiles } from './map';
-import { unlockedColors } from './palette';
+import { bakeTiles, snapshotTiles } from './map';
+import { RAINBOW_COLORS, unlockedColors } from './palette';
 import { consumeLevelUp, resetPickups } from './pickups';
+import { generatePipes, takePipeSegment } from './pipes';
 import { player, resetPlayer } from './player';
 import { rebakeAllSprites } from './sprites';
 import {
   applyPick,
+  COLOR_NAMES,
+  COLOR_POWERS,
   CON_HP_PER_RANK,
   type DraftCard,
   dealLevelUpCards,
+  grantPower,
   KIND_STAT,
+  POWER_TITLE,
+  POWER_UNLOCK_BODY,
   resetRunStats,
   STAT_CON,
 } from './stats';
@@ -24,8 +31,16 @@ export const SCENE_RUN = 1;
 
 export let scene = SCENE_TITLE;
 
+const PHASE_PIPE = 0;
+const PHASE_WAVE = 1;
+const PIPE_GAP_MS = 45;
+const WAVE_SPEED = 0.38;
+
 let pauseOpen = false;
 let hand: DraftCard[] = [];
+let seq: { phase: number; color: number; x: number; y: number; wait: number } | null = null;
+
+export const colorWave = { active: false, x: 0, y: 0, r: 0 };
 
 /** Later overlays (pipe-unlock, death, win) push here so they never overlap. */
 const overlayQueue: (() => void)[] = [];
@@ -36,6 +51,10 @@ export function enqueueOverlay(open: () => void): void {
 
 export function isWorldFrozen(): boolean {
   return scene !== SCENE_RUN || isUiOpen();
+}
+
+export function isSequenceActive(): boolean {
+  return seq !== null;
 }
 
 function openTitle(): void {
@@ -54,6 +73,7 @@ function startRun(): void {
 function quitToTitle(): void {
   closeUi();
   overlayQueue.length = 0;
+  resetRun();
   openTitle();
 }
 
@@ -89,6 +109,31 @@ function openLevelUp(): void {
   });
 }
 
+function openUnlock(color: number): void {
+  const power = COLOR_POWERS[color];
+  const hex = '#' + RAINBOW_COLORS[color].toString(16).padStart(6, '0');
+  openCards(
+    COLOR_NAMES[color],
+    [{ title: POWER_TITLE[power], body: POWER_UNLOCK_BODY[color] }],
+    () => closeUi(),
+    hex
+  );
+}
+
+function beginWave(color: number, x: number, y: number): void {
+  snapshotTiles();
+  unlockedColors[color] = true;
+  bakeTiles();
+  rebakeAllSprites();
+  colorWave.active = true;
+  colorWave.x = x;
+  colorWave.y = y;
+  colorWave.r = 0;
+  if (seq) {
+    seq.phase = PHASE_WAVE;
+  }
+}
+
 function pumpOverlays(): void {
   if (isUiOpen() || scene !== SCENE_RUN) {
     return;
@@ -116,8 +161,11 @@ export function initOverlays(): void {
 }
 
 export function resetRun(): void {
+  seq = null;
+  colorWave.active = false;
   resetRunStats();
   resetPlayer();
+  generatePipes(1);
   resetEnemies();
   resetPickups();
   resetExplosions();
@@ -127,6 +175,67 @@ export function resetRun(): void {
   }
   rebakeAllSprites();
   bakeTiles();
+}
+
+/** Consume a slain miniboss and start the choreographed death sequence. */
+export function startPendingDeathSequence(
+  camX: number,
+  camY: number,
+  viewW: number,
+  viewH: number
+): void {
+  const death = takeSlainMiniboss();
+  if (!death) {
+    return;
+  }
+  grantPower(COLOR_POWERS[death.color]);
+  unlockNextTier();
+  killOnScreenRegulars(camX, camY, viewW, viewH);
+  seq = {
+    phase: PHASE_PIPE,
+    color: death.color,
+    x: death.x,
+    y: death.y,
+    wait: 0,
+  };
+}
+
+export function updateSequence(dt: number): void {
+  if (!seq) {
+    return;
+  }
+  if (seq.phase === PHASE_PIPE) {
+    seq.wait += dt;
+    while (seq.wait >= PIPE_GAP_MS) {
+      seq.wait -= PIPE_GAP_MS;
+      const piece = takePipeSegment(seq.color);
+      if (!piece) {
+        beginWave(seq.color, seq.x, seq.y);
+        return;
+      }
+      const cx = piece.x + piece.canvas.width / 2;
+      const cy = piece.y + piece.canvas.height / 2;
+      spawnExplosion(cx, cy, RAINBOW_COLORS[seq.color], 10);
+      spawnExplosion(cx, cy, 0xb1b1b1, 8);
+    }
+    return;
+  }
+
+  colorWave.r += WAVE_SPEED * dt;
+  const worldW = MAP_WIDTH * TILE_SIZE;
+  const worldH = MAP_HEIGHT * TILE_SIZE;
+  const maxR = Math.max(
+    Math.hypot(colorWave.x, colorWave.y),
+    Math.hypot(worldW - colorWave.x, colorWave.y),
+    Math.hypot(colorWave.x, worldH - colorWave.y),
+    Math.hypot(worldW - colorWave.x, worldH - colorWave.y)
+  );
+  if (colorWave.r >= maxR) {
+    colorWave.active = false;
+    const color = seq.color;
+    seq = null;
+    openUnlock(color);
+  }
 }
 
 export function updateOverlays(viewWidth: number, viewHeight: number): void {

@@ -115,6 +115,23 @@ export function generateMap(): void {
 }
 
 export const tileCanvases: HTMLCanvasElement[] = [];
+/** Palette state from before the current color wave. */
+export const tileCanvasesPrev: HTMLCanvasElement[] = [];
+
+/** Copy the live tile bakes so a wave can draw old + new palettes. */
+export function snapshotTiles(): void {
+  for (let tile = 0; tile < tileCanvases.length; tile++) {
+    let canvas = tileCanvasesPrev[tile];
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.width = TILE_SIZE;
+      canvas.height = TILE_SIZE;
+      tileCanvasesPrev[tile] = canvas;
+    }
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    ctx.drawImage(tileCanvases[tile], 0, 0);
+  }
+}
 
 export function bakeTiles(): void {
   for (let tile = 0; tile <= TILE_WALL; tile++) {

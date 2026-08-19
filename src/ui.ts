@@ -53,10 +53,11 @@ export function openMenu(
 export function openCards(
   title: string | null,
   items: { title: string; body: string }[],
-  pick: (index: number) => void
+  pick: (index: number) => void,
+  titleColor = '#fff'
 ): void {
   layout = LAYOUT_CARDS;
-  heading = title ? bakeText(title) : null;
+  heading = title ? bakeText(title, titleColor) : null;
   headingTop = false;
   labels = items.map((item) => bakeText(item.title));
   bodies = items.map((item) => bakeText(item.body));

@@ -268,6 +268,8 @@ export function updateCombat(
     return true;
   });
 
+  updateMinibossPowers(dt);
+
   updateBolts(dt);
   for (let i = novas.length - 1; i >= 0; i--) {
     novas[i].life -= dt;
@@ -374,6 +376,46 @@ function tryFrostball(): boolean {
     true,
     powerAmount(FREEZE_MS, POWER_FROSTBALL)
   );
+}
+
+function updateMinibossPowers(dt: number): void {
+  const target = playerCenter();
+  for (const enemy of enemies) {
+    if (enemy.color < 0 || enemy.color === 2 || !enemy.chasing) {
+      continue;
+    }
+    enemy.cd -= dt;
+    if (enemy.cd > 0) {
+      continue;
+    }
+    const box = enemyHitbox(enemy);
+    const x = box.x + box.w / 2;
+    const y = box.y + box.h / 2;
+    const color = enemy.color;
+    if (color === 0) {
+      spawnBolt(x, y, target.x, target.y, BOLT_FIRE, FIREBALL_DAMAGE, false);
+      enemy.cd = FIREBALL_COOLDOWN_MS;
+    } else if (color === 1) {
+      fireNova(x, y, NOVA_RADIUS, FLAME_NOVA_DAMAGE, 0, '#ff8200', false);
+      enemy.cd = FLAME_NOVA_COOLDOWN_MS;
+    } else if (color === 3) {
+      enemy.hp = Math.min(enemy.maxHp, enemy.hp + HEAL_AMOUNT);
+      enemy.cd = HEAL_COOLDOWN_MS;
+    } else if (color === 4) {
+      fireNova(x, y, NOVA_RADIUS, 0, FREEZE_MS, '#0030e2', false);
+      enemy.cd = FROST_NOVA_COOLDOWN_MS;
+    } else if (color === 5) {
+      spawnBolt(x, y, target.x, target.y, BOLT_FROST, 0, false, FREEZE_MS);
+      enemy.cd = FROSTBALL_COOLDOWN_MS;
+    } else if (color === 6) {
+      if (enemy.shield > 0) {
+        enemy.cd = 0;
+        continue;
+      }
+      enemy.shield = SHIELD_ABSORB;
+      enemy.cd = SHIELD_COOLDOWN_MS;
+    }
+  }
 }
 
 /**

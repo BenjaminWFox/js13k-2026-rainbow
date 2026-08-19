@@ -1,4 +1,11 @@
-import { MAP_HEIGHT, MAP_WIDTH, PLAYER_HIT, TILE_SIZE } from './constants';
+import {
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  PLAYER_HEIGHT,
+  PLAYER_HIT,
+  PLAYER_WIDTH,
+  TILE_SIZE,
+} from './constants';
 import { hubRadiusTiles, PORTAL_CELLS } from './map';
 import { RAINBOW_COLORS } from './palette';
 import { createSprite } from './sprites';
@@ -21,6 +28,12 @@ export interface PipePiece {
 export const pipePieces: PipePiece[] = [];
 export const portalBacks: PipePiece[] = [];
 export const portalFronts: PipePiece[] = [];
+/** Pieces per pipe, portal → cap. Same objects as `pipePieces`. */
+export const pipeRuns: PipePiece[][] = [];
+/** Miniboss stand positions, just inward of each portal. */
+export const pipeHomes: { x: number; y: number }[] = [];
+
+let currentRun: PipePiece[] = [];
 
 const DIR_E = 0;
 const DIR_N = 1;
@@ -382,12 +395,14 @@ function curvePreview(
 }
 
 function addPipePiece(canvas: HTMLCanvasElement, x: number, y: number, hits?: HitBox[]): void {
-  pipePieces.push({
+  const piece: PipePiece = {
     canvas,
     x,
     y,
     hits: hits ?? [{ x, y, w: canvas.width, h: canvas.height }],
-  });
+  };
+  pipePieces.push(piece);
+  currentRun.push(piece);
 }
 
 /** Two 6×5 arms: 6px face matches the adjoining straight, 5px into the elbow. */
@@ -666,6 +681,8 @@ export function generatePipes(seed: number): void {
   pipePieces.length = 0;
   portalBacks.length = 0;
   portalFronts.length = 0;
+  pipeRuns.length = 0;
+  pipeHomes.length = 0;
   bakePieces();
   resetBlocked();
 
@@ -691,9 +708,29 @@ export function generatePipes(seed: number): void {
 
     pushPortal(portalX, portalY, emergeEast);
     useKit(i);
+    currentRun = [];
+    pipeRuns.push(currentRun);
+    pipeHomes.push({
+      x: emergeEast ? portalX + PORTAL_W + 4 : portalX - PLAYER_WIDTH - 4,
+      y: portalY + PORTAL_H - PLAYER_HEIGHT,
+    });
     const from = pipePieces.length;
     buildPipe(startX, cy, dir, targetX, targetY, random);
     stampPieces(from, pipePieces.length);
     stampBox(portalX, portalY, PORTAL_W, PORTAL_H);
   }
+}
+
+/** Pull the next portal-end segment off a pipe. Returns null when empty. */
+export function takePipeSegment(color: number): PipePiece | null {
+  const run = pipeRuns[color];
+  if (!run || run.length === 0) {
+    return null;
+  }
+  const piece = run.shift() as PipePiece;
+  const index = pipePieces.indexOf(piece);
+  if (index >= 0) {
+    pipePieces.splice(index, 1);
+  }
+  return piece;
 }

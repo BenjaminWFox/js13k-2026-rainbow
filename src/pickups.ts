@@ -74,6 +74,21 @@ export function bakePickups(): void {
   scrapSprite = createSprite(93, 0, SCRAP_W, SCRAP_H);
 }
 
+/** Miniboss / final-boss chunk: several independent rolls plus guaranteed scrap. */
+export function dropBossLoot(x: number, y: number): void {
+  for (let i = 0; i < 6; i++) {
+    dropLoot(x + (Math.random() - 0.5) * 14, y + (Math.random() - 0.5) * 14);
+  }
+  for (let i = 0; i < 4; i++) {
+    pickups.push({
+      x: x - SCRAP_W / 2 + (Math.random() - 0.5) * 14,
+      y: y - SCRAP_H / 2 + (Math.random() - 0.5) * 14,
+      kind: PICKUP_SCRAP,
+      delay: MAGNET_DELAY_MS,
+    });
+  }
+}
+
 /** Independent crystal/scrap rolls at a world point (usually an enemy center). */
 export function dropLoot(x: number, y: number): void {
   if (Math.random() < CRYSTAL_CHANCE) {

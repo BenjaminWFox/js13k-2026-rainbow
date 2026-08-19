@@ -15,14 +15,18 @@ import { bakeEnemyTypes, drawEnemies, updateEnemies } from './enemies';
 import { drawExplosions, updateExplosions } from './fx';
 import { bakeHud, drawHud } from './hud';
 import { clearPressedKeys, initInput } from './input';
-import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
+import { bakeTiles, generateMap, getTile, tileCanvases, tileCanvasesPrev } from './map';
 import {
+  colorWave,
   drawOverlays,
   initOverlays,
+  isSequenceActive,
   isWorldFrozen,
   SCENE_RUN,
   scene,
+  startPendingDeathSequence,
   updateOverlays,
+  updateSequence,
 } from './overlays';
 import { bakePickups, drawPickups, updatePickups } from './pickups';
 import { generatePipes, pipePieces, portalBacks, portalFronts } from './pipes';
@@ -91,10 +95,19 @@ function gameLoop(time: number): void {
   }
   updateOverlays(viewWidth, viewHeight);
   if (!isWorldFrozen()) {
-    updatePlayer(dt);
-    const cam = cameraOrigin();
-    updateCombat(dt, cam.x, cam.y, viewWidth, viewHeight);
-    updateEnemies(dt, viewWidth, viewHeight);
+    if (isSequenceActive()) {
+      updateSequence(dt);
+    } else {
+      updatePlayer(dt);
+      const cam = cameraOrigin();
+      updateCombat(dt, cam.x, cam.y, viewWidth, viewHeight);
+      startPendingDeathSequence(cam.x, cam.y, viewWidth, viewHeight);
+      if (isSequenceActive()) {
+        updateSequence(dt);
+      } else {
+        updateEnemies(dt, viewWidth, viewHeight);
+      }
+    }
     updatePickups(dt);
     updateExplosions(dt);
   }
@@ -114,14 +127,22 @@ function render(): void {
   const firstTileY = Math.floor(cameraY / TILE_SIZE);
   const lastTileX = Math.floor((cameraX + viewWidth) / TILE_SIZE);
   const lastTileY = Math.floor((cameraY + viewHeight) / TILE_SIZE);
-  for (let ty = firstTileY; ty <= lastTileY; ty++) {
-    for (let tx = firstTileX; tx <= lastTileX; tx++) {
-      ctx.drawImage(
-        tileCanvases[getTile(tx, ty)],
-        Math.floor(tx * TILE_SIZE - cameraX),
-        Math.floor(ty * TILE_SIZE - cameraY)
-      );
-    }
+  drawTiles(
+    colorWave.active ? tileCanvasesPrev : tileCanvases,
+    cameraX,
+    cameraY,
+    firstTileX,
+    firstTileY,
+    lastTileX,
+    lastTileY
+  );
+  if (colorWave.active) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(colorWave.x - cameraX, colorWave.y - cameraY, colorWave.r, 0, Math.PI * 2);
+    ctx.clip();
+    drawTiles(tileCanvases, cameraX, cameraY, firstTileX, firstTileY, lastTileX, lastTileY);
+    ctx.restore();
   }
 
   drawPickups(ctx, cameraX, cameraY, viewWidth, viewHeight);
@@ -173,6 +194,26 @@ function render(): void {
       lastTileY,
       viewHeight
     );
+  }
+}
+
+function drawTiles(
+  canvases: HTMLCanvasElement[],
+  cameraX: number,
+  cameraY: number,
+  firstTileX: number,
+  firstTileY: number,
+  lastTileX: number,
+  lastTileY: number
+): void {
+  for (let ty = firstTileY; ty <= lastTileY; ty++) {
+    for (let tx = firstTileX; tx <= lastTileX; tx++) {
+      ctx.drawImage(
+        canvases[getTile(tx, ty)],
+        Math.floor(tx * TILE_SIZE - cameraX),
+        Math.floor(ty * TILE_SIZE - cameraY)
+      );
+    }
   }
 }
 

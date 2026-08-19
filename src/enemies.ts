@@ -1,10 +1,11 @@
-import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
+import { MAP_HEIGHT, MAP_WIDTH, PLAYER_HEIGHT, PLAYER_HIT, TILE_SIZE } from './constants';
 import { spawnExplosion } from './fx';
 import { getTile, TILE_WALL } from './map';
-import { dropLoot } from './pickups';
-import { pipePieces } from './pipes';
+import { RAINBOW_COLORS } from './palette';
+import { dropBossLoot, dropLoot } from './pickups';
+import { pipeHomes, pipePieces } from './pipes';
 import { damagePlayer, getPlayerHitbox } from './player';
-import { createSprite, measureContentBox } from './sprites';
+import { afterRebake, createSprite, measureContentBox } from './sprites';
 
 /**
  * Difficulty ladder (easiest → hardest) mapped to sheet cell index within the
@@ -23,7 +24,14 @@ const TELEPORT_FACTOR = 1.75;
 const CONTACT_TICK_MS = 500;
 // px/ms — per-type speeds TBD; every type shares this for now (player is 0.05)
 const ENEMY_SPEED = 0.03;
+const MINI_SPEED = 0.04;
+const MINI_SPEED_YELLOW = 0.06;
+const CHASE_IN = 75;
+const CHASE_OUT = 250;
+const RESET_RANGE = 500;
+const MINI_CONTACT = 5;
 const BOB_PERIOD_MS = 900;
+const MINI_HIT_Y = PLAYER_HEIGHT - PLAYER_HIT;
 
 // Coarse separation grid over the whole map
 const GRID_CELL = 22;
@@ -64,12 +72,65 @@ export interface Enemy {
   slowed: number;
   /** True for minibosses and the final boss: CC slows instead of freezing. */
   boss: boolean;
+  /** -1 = regular enemy; 0–6 = the miniboss that guards that color. */
+  color: number;
+  maxHp: number;
+  homeX: number;
+  homeY: number;
+  /** Attack cooldown remaining (ms). */
+  cd: number;
+  shield: number;
+  chasing: boolean;
 }
 
 export const enemies: Enemy[] = [];
 
-// Tiers allowed to spawn; each destroyed pipe unlocks the next (phase 6)
-const unlockedTiers = 1;
+// Tiers allowed to spawn; each destroyed pipe unlocks the next type
+let unlockedTiers = 1;
+
+const minibossSprites: HTMLCanvasElement[] = [];
+
+const miniHit = {
+  hitX: 0,
+  hitY: MINI_HIT_Y,
+  hitW: PLAYER_HIT,
+  hitH: PLAYER_HIT,
+  radius: PLAYER_HIT / 2,
+  contactDamage: MINI_CONTACT,
+};
+
+/** Set when a miniboss dies; consumed the same frame to start the death sequence. */
+let slainMiniboss: { color: number; x: number; y: number } | null = null;
+
+export function takeSlainMiniboss(): { color: number; x: number; y: number } | null {
+  const slain = slainMiniboss;
+  slainMiniboss = null;
+  return slain;
+}
+
+function hitOf(enemy: Enemy): {
+  hitX: number;
+  hitY: number;
+  hitW: number;
+  hitH: number;
+  radius: number;
+  contactDamage: number;
+} {
+  return enemy.color >= 0 ? miniHit : enemyTypes[enemy.type];
+}
+
+function tintEyes(canvas: HTMLCanvasElement, rgb: number): void {
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+  ctx.fillStyle = '#' + rgb.toString(16).padStart(6, '0');
+  ctx.fillRect(4, 6, 1, 1);
+  ctx.fillRect(6, 6, 1, 1);
+}
+
+function retintBossEyes(): void {
+  for (let i = 0; i < minibossSprites.length; i++) {
+    tintEyes(minibossSprites[i], RAINBOW_COLORS[i]);
+  }
+}
 
 /** Bake one canvas + content hitbox per enemy type. Call once after the sheet loads. */
 export function bakeEnemyTypes(): void {
@@ -87,6 +148,13 @@ export function bakeEnemyTypes(): void {
       hp: 8 + tier * 4,
     });
   }
+  if (minibossSprites.length === 0) {
+    for (let i = 0; i < 7; i++) {
+      minibossSprites.push(createSprite(11, 0, 11, 19));
+    }
+    afterRebake(retintBossEyes);
+  }
+  retintBossEyes();
 }
 
 let spawnTimer = 0;
@@ -95,6 +163,35 @@ let lastSpawnRadius = 200;
 export function resetEnemies(): void {
   enemies.length = 0;
   spawnTimer = 0;
+  unlockedTiers = 1;
+  slainMiniboss = null;
+  spawnMinibosses();
+}
+
+function spawnMinibosses(): void {
+  for (let i = 0; i < pipeHomes.length; i++) {
+    const home = pipeHomes[i];
+    enemies.push({
+      x: home.x,
+      y: home.y,
+      type: 0,
+      hp: 100,
+      kbX: 0,
+      kbY: 0,
+      bobTime: 0,
+      contactTimer: 0,
+      frozen: 0,
+      slowed: 0,
+      boss: true,
+      color: i,
+      maxHp: 100,
+      homeX: home.x,
+      homeY: home.y,
+      cd: 0,
+      shield: 0,
+      chasing: false,
+    });
+  }
 }
 
 export function updateEnemies(dt: number, viewWidth: number, viewHeight: number): void {
@@ -114,10 +211,11 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
 
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
-    const type = enemyTypes[enemy.type];
+    const type = hitOf(enemy);
+    const isMini = enemy.color >= 0;
     if (enemy.frozen > 0) {
       enemy.frozen = Math.max(0, enemy.frozen - dt);
-    } else {
+    } else if (!isMini) {
       enemy.bobTime += dt;
     }
     if (enemy.slowed > 0) {
@@ -131,13 +229,18 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
     const towardY = playerCenterY - centerY;
     const dist = Math.hypot(towardX, towardY);
 
-    if (dist > teleportRadius) {
+    if (!isMini && dist > teleportRadius) {
       // Too far: teleport back to the spawn ring — unless we're near the cap,
       // in which case despawn in favor of fresh spawns.
       if (enemies.length >= ENEMY_CAP - 5) {
         enemies.splice(i, 1);
       } else {
-        const spot = findSpawnSpot(type, playerCenterX, playerCenterY, spawnRadius);
+        const spot = findSpawnSpot(
+          enemyTypes[enemy.type],
+          playerCenterX,
+          playerCenterY,
+          spawnRadius
+        );
         if (spot) {
           enemy.x = spot.x;
           enemy.y = spot.y;
@@ -147,6 +250,19 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
         }
       }
       continue;
+    }
+
+    if (isMini) {
+      if (dist > RESET_RANGE) {
+        enemy.hp = enemy.maxHp;
+        enemy.shield = 0;
+        enemy.slowed = 0;
+        enemy.chasing = false;
+      } else if (dist > CHASE_OUT) {
+        enemy.chasing = false;
+      } else if (dist < CHASE_IN) {
+        enemy.chasing = true;
+      }
     }
 
     // Knockback from stomp, decaying independently of the chase
@@ -168,16 +284,29 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
       }
     }
 
-    // Chase: straight toward the player; walls block, pipes don't
-    if (dist > 1 && enemy.frozen <= 0) {
-      const step = ENEMY_SPEED * (enemy.slowed > 0 ? 0.5 : 1) * dt;
-      const moveX = (towardX / dist) * step;
-      const moveY = (towardY / dist) * step;
-      if (!hitsWall(enemy.x + type.hitX + moveX, enemy.y + type.hitY, type.hitW, type.hitH)) {
-        enemy.x += moveX;
+    let moveX = towardX;
+    let moveY = towardY;
+    let moveDist = dist;
+    let speed = ENEMY_SPEED;
+    if (isMini) {
+      speed = enemy.color === 2 ? MINI_SPEED_YELLOW : MINI_SPEED;
+      if (!enemy.chasing) {
+        moveX = enemy.homeX - enemy.x;
+        moveY = enemy.homeY - enemy.y;
+        moveDist = Math.hypot(moveX, moveY);
       }
-      if (!hitsWall(enemy.x + type.hitX, enemy.y + type.hitY + moveY, type.hitW, type.hitH)) {
-        enemy.y += moveY;
+    }
+
+    // Chase: straight toward the player; walls block, pipes don't
+    if (moveDist > 1 && enemy.frozen <= 0) {
+      const step = speed * (enemy.slowed > 0 ? 0.5 : 1) * dt;
+      const dx = (moveX / moveDist) * step;
+      const dy = (moveY / moveDist) * step;
+      if (!hitsWall(enemy.x + type.hitX + dx, enemy.y + type.hitY, type.hitW, type.hitH)) {
+        enemy.x += dx;
+      }
+      if (!hitsWall(enemy.x + type.hitX, enemy.y + type.hitY + dy, type.hitW, type.hitH)) {
+        enemy.y += dy;
       }
     }
 
@@ -223,6 +352,13 @@ function trySpawn(playerCenterX: number, playerCenterY: number, radius: number):
       frozen: 0,
       slowed: 0,
       boss: false,
+      color: -1,
+      maxHp: type.hp,
+      homeX: 0,
+      homeY: 0,
+      cd: 0,
+      shield: 0,
+      chasing: false,
     });
   }
 }
@@ -298,7 +434,7 @@ function separate(): void {
   gridHead.fill(-1);
   for (let i = 0; i < enemies.length; i++) {
     const enemy = enemies[i];
-    const type = enemyTypes[enemy.type];
+    const type = hitOf(enemy);
     const cell =
       cellCoord(enemy.y + type.hitY + type.hitH / 2, GRID_H) * GRID_W +
       cellCoord(enemy.x + type.hitX + type.hitW / 2, GRID_W);
@@ -308,7 +444,7 @@ function separate(): void {
 
   for (let i = 0; i < enemies.length; i++) {
     const a = enemies[i];
-    const typeA = enemyTypes[a.type];
+    const typeA = hitOf(a);
     const ax = a.x + typeA.hitX + typeA.hitW / 2;
     const ay = a.y + typeA.hitY + typeA.hitH / 2;
     const cellX = cellCoord(ax, GRID_W);
@@ -320,7 +456,7 @@ function separate(): void {
             continue;
           }
           const b = enemies[j];
-          const typeB = enemyTypes[b.type];
+          const typeB = hitOf(b);
           const minDist = (typeA.radius + typeB.radius) * 0.5;
           let dx = b.x + typeB.hitX + typeB.hitW / 2 - ax;
           let dy = b.y + typeB.hitY + typeB.hitH / 2 - ay;
@@ -348,7 +484,7 @@ function separate(): void {
   const maxRight = (MAP_WIDTH - 1) * TILE_SIZE;
   const maxBottom = (MAP_HEIGHT - 1) * TILE_SIZE;
   for (const enemy of enemies) {
-    const type = enemyTypes[enemy.type];
+    const type = hitOf(enemy);
     enemy.x = Math.min(maxRight - type.hitW - type.hitX, Math.max(TILE_SIZE - type.hitX, enemy.x));
     enemy.y = Math.min(maxBottom - type.hitH - type.hitY, Math.max(TILE_SIZE - type.hitY, enemy.y));
   }
@@ -363,13 +499,21 @@ export function drawEnemies(
 ): void {
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   for (const enemy of enemies) {
-    const type = enemyTypes[enemy.type];
-    const screenX = Math.floor(enemy.x - cameraX);
-    const screenY = Math.floor(enemy.y - cameraY);
-    if (screenX + 7 < 0 || screenY + 10 < 0 || screenX > viewWidth || screenY > viewHeight) {
+    if (enemy.color >= 0) {
       continue;
     }
-    // 1px float bob; the shadow hugs the ground and grows on the "down" frame
+    const type = hitOf(enemy);
+    const canvas = enemyTypes[enemy.type].canvas;
+    const screenX = Math.floor(enemy.x - cameraX);
+    const screenY = Math.floor(enemy.y - cameraY);
+    if (
+      screenX + canvas.width < 0 ||
+      screenY + canvas.height < 0 ||
+      screenX > viewWidth ||
+      screenY > viewHeight
+    ) {
+      continue;
+    }
     const down = enemy.frozen > 0 || enemy.bobTime % BOB_PERIOD_MS < BOB_PERIOD_MS / 2;
     const shadowW = down ? 5 : 3;
     ctx.fillRect(
@@ -378,7 +522,7 @@ export function drawEnemies(
       shadowW,
       1
     );
-    ctx.drawImage(type.canvas, screenX, screenY - (down ? 0 : 1));
+    ctx.drawImage(canvas, screenX, screenY - (down ? 0 : 1));
     if (enemy.frozen > 0) {
       ctx.strokeStyle = '#8df';
       ctx.lineWidth = 1;
@@ -390,11 +534,55 @@ export function drawEnemies(
       );
     }
   }
+  for (const enemy of enemies) {
+    if (enemy.color < 0) {
+      continue;
+    }
+    const canvas = minibossSprites[enemy.color];
+    const screenX = Math.floor(enemy.x - cameraX);
+    const screenY = Math.floor(enemy.y - cameraY);
+    if (
+      screenX + canvas.width < 0 ||
+      screenY + canvas.height < 0 ||
+      screenX > viewWidth ||
+      screenY > viewHeight
+    ) {
+      continue;
+    }
+    ctx.drawImage(canvas, screenX, screenY);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(screenX, screenY + canvas.height + 1, canvas.width, 3);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(
+      screenX + 1,
+      screenY + canvas.height + 2,
+      Math.round((canvas.width - 2) * (enemy.hp / enemy.maxHp)),
+      1
+    );
+    if (enemy.shield > 0) {
+      const cx = screenX + canvas.width / 2;
+      const cy = screenY + canvas.height / 2;
+      ctx.strokeStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#a656ff';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (enemy.slowed > 0) {
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#8df';
+      ctx.fillRect(screenX, screenY, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+    }
+  }
 }
 
 /** World-space content hitbox (also used by the debug overlay). */
 export function enemyHitbox(enemy: Enemy): { x: number; y: number; w: number; h: number } {
-  const type = enemyTypes[enemy.type];
+  const type = hitOf(enemy);
   return { x: enemy.x + type.hitX, y: enemy.y + type.hitY, w: type.hitW, h: type.hitH };
 }
 
@@ -422,23 +610,74 @@ export function hurtEnemyAt(index: number, amount: number): boolean {
   if (enemy.frozen > 0) {
     amount *= 1.25;
   }
+  const box = enemyHitbox(enemy);
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  if (enemy.shield > 0) {
+    const used = Math.min(enemy.shield, amount);
+    enemy.shield -= used;
+    amount -= used;
+    spawnExplosion(cx, cy, 0xa656ff, 4);
+    if (amount <= 0) {
+      return false;
+    }
+  }
   enemy.hp -= amount;
   if (enemy.hp > 0) {
     return false;
   }
-  const type = enemyTypes[enemy.type];
-  const cx = enemy.x + type.hitX + type.hitW / 2;
-  const cy = enemy.y + type.hitY + type.hitH / 2;
-  spawnExplosion(cx, cy, 0xb1b1b1, 12);
-  dropLoot(cx, cy);
-  enemies.splice(index, 1);
+  if (enemy.color >= 0) {
+    spawnExplosion(cx, cy, RAINBOW_COLORS[enemy.color], 18);
+    dropBossLoot(cx, cy);
+    slainMiniboss = { color: enemy.color, x: cx, y: cy };
+    enemies.splice(index, 1);
+    return true;
+  }
+  killRegularAt(index);
   return true;
 }
 
+function killRegularAt(index: number): void {
+  const box = enemyHitbox(enemies[index]);
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  spawnExplosion(cx, cy, 0xb1b1b1, 12);
+  dropLoot(cx, cy);
+  enemies.splice(index, 1);
+}
+
+/** Kill visible regulars so they drop loot; minibosses are left alone. */
+export function killOnScreenRegulars(
+  camX: number,
+  camY: number,
+  viewW: number,
+  viewH: number
+): void {
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    if (enemies[i].color >= 0) {
+      continue;
+    }
+    const box = enemyHitbox(enemies[i]);
+    if (
+      box.x + box.w < camX ||
+      box.x > camX + viewW ||
+      box.y + box.h < camY ||
+      box.y > camY + viewH
+    ) {
+      continue;
+    }
+    killRegularAt(i);
+  }
+}
+
+export function unlockNextTier(): void {
+  unlockedTiers = Math.min(8, unlockedTiers + 1);
+}
+
 export function applyKnockback(enemy: Enemy, fromX: number, fromY: number, speed: number): void {
-  const type = enemyTypes[enemy.type];
-  const cx = enemy.x + type.hitX + type.hitW / 2;
-  const cy = enemy.y + type.hitY + type.hitH / 2;
+  const box = enemyHitbox(enemy);
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
   let dx = cx - fromX;
   let dy = cy - fromY;
   let dist = Math.hypot(dx, dy);
@@ -446,6 +685,9 @@ export function applyKnockback(enemy: Enemy, fromX: number, fromY: number, speed
     dx = 1;
     dy = 0;
     dist = 1;
+  }
+  if (enemy.boss) {
+    speed *= 0.5;
   }
   enemy.kbX = (dx / dist) * speed;
   enemy.kbY = (dy / dist) * speed;

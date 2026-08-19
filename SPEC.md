@@ -669,7 +669,7 @@ self-contained work any competent model can execute from this spec.
 Already built (no work needed): bake engine, palette/desaturation, pipes, world slices +
 plaza, camera, player movement/collision (§3), swarm core, starting-kit combat, packed
 font + HUD, menu/overlay framework (pause, level-up draft, stats), color powers +
-projectiles + freeze.
+projectiles + freeze, minibosses + pipe destruction + color wave.
 
 | Phase | Work | Model | Why | Complete |
 |-------|------|-------|-----|----------|
@@ -678,7 +678,7 @@ projectiles + freeze.
 | 3 | **Packed font + HUD:** font renderer + label baking, XP bar, "Level #", scrap counter, color squares, pause icon | Capable | Well-bounded; unblocks every later text UI | ✅ |
 | 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere | ✅ |
 | 5 | **Powers:** all 7 color powers, projectiles, freeze/slow, WIS scaling, stack rule | Flagship | Seven abilities sharing targeting/cooldown/freeze machinery; minibosses reuse these | ✅ |
-| 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | |
+| 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | ✅ |
 | 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework | |
 | 8 | **Final boss + finale:** plaza portal, all-powers boss, map-wide pursuit, win state | Capable | Reuses phase-5 powers and phase-6 patterns; numbers are specified | |
 | 9 | **Opening cutscene + dialogue UI:** panel component, scripted choreography, skip | Flagship | Scripted movement + sequenced pipe/color drain under tight bytes; first candidate on the fallback ladder, so cost judgment matters | |
@@ -686,13 +686,11 @@ projectiles + freeze.
 
 Notes:
 
-- Phase 6 is next. Debug keys 1–7 grant/revoke the matching color power
-  (fireball through shield) for playtesting. `spawnBolt` / `fireNova` /
-  `crowdControl` are ready for minibosses. Placeholder combat numbers follow
-  the starting-kit style until the tuning phase. The overlay queue
-  (`enqueueOverlay`) and card/menu widget are ready for pipe-unlock, shop,
-  and death/win screens. Title currently has Start only; Upgrades/shop ranks
-  land in phase 7. Placeholder XP curve is `5 * current level` crystals
-  until tuning.
+- Phase 7 is next. Death/win overlays, revives, localStorage, scrap shop, and
+  the title Upgrades button still need the phase-4 card/menu widget. Miniboss
+  death already grants the color power and queues the unlock card before any
+  pending level-up. Debug keys 1–7 still toggle palette + powers without
+  killing the matching miniboss. Placeholder combat numbers follow the
+  starting-kit style until the tuning phase.
 - Audio (phase 10) stays deferred per §2; drop stretch items before shop rows per the
   §1 fallback ladder.

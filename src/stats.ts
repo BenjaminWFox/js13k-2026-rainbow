@@ -42,7 +42,7 @@ export const SPEED_PER_RANK = 0.15;
 
 const STAT_TITLE = ['STR', 'DEX', 'CON', 'WIS'];
 const STAT_BODY = ['KIT DMG', 'LESS HITS', 'MAX HP', 'COLOR DMG'];
-const POWER_TITLE = [
+export const POWER_TITLE = [
   'HORN',
   'STOMP',
   'FIREBALL',
@@ -52,6 +52,16 @@ const POWER_TITLE = [
   'FROST NOVA',
   'FROSTBALL',
   'SHIELD',
+];
+export const COLOR_NAMES = ['RED', 'ORANGE', 'YELLOW', 'GREEN', 'BLUE', 'INDIGO', 'VIOLET'];
+export const POWER_UNLOCK_BODY = [
+  'RANGED DAMAGE',
+  'AREA DAMAGE',
+  'MOVE SPEED',
+  'HEAL PULSE',
+  'AREA FREEZE',
+  'RANGED FREEZE',
+  'DAMAGE SHIELD',
 ];
 
 const LUCK_FOURTH = [0, 0.25, 0.5, 0.75];

@@ -188,9 +188,19 @@ export function measureContentBox(
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
+const rebakeHooks: (() => void)[] = [];
+
+/** Run after every rebake (e.g. to retint miniboss eyes). */
+export function afterRebake(hook: () => void): void {
+  rebakeHooks.push(hook);
+}
+
 /** Re-render every baked sprite after the palette unlock state changes. */
 export function rebakeAllSprites(): void {
   for (const sprite of bakedSprites) {
     bake(sprite);
+  }
+  for (const hook of rebakeHooks) {
+    hook();
   }
 }
