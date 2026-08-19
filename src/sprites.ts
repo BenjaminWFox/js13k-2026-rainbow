@@ -151,6 +151,43 @@ function bake(sprite: BakedSprite): void {
   ctx.putImageData(output, 0, 0);
 }
 
+/**
+ * Tight AABB of the opaque pixels inside a sheet cell, relative to the cell
+ * origin. Used for content-sized hitboxes (enemy cells are padded to 7×9).
+ */
+export function measureContentBox(
+  sourceX: number,
+  sourceY: number,
+  width: number,
+  height: number
+): { x: number; y: number; w: number; h: number } {
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const alpha = sheet.data[((sourceY + y) * sheet.width + sourceX + x) * 4 + 3];
+      if (alpha === 0) {
+        continue;
+      }
+      if (x < minX) {
+        minX = x;
+      }
+      if (y < minY) {
+        minY = y;
+      }
+      if (x > maxX) {
+        maxX = x;
+      }
+      if (y > maxY) {
+        maxY = y;
+      }
+    }
+  }
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
 /** Re-render every baked sprite after the palette unlock state changes. */
 export function rebakeAllSprites(): void {
   for (const sprite of bakedSprites) {

@@ -1,9 +1,10 @@
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
+import { enemies, enemyHitbox, spawnBurst } from './enemies';
 import { wasPressed } from './input';
 import { bakeTiles, getTile, getTileSolid, TILE_WALL } from './map';
 import { unlockedColors } from './palette';
 import { pipePieces } from './pipes';
-import { getPlayerHitbox } from './player';
+import { getPlayerHitbox, player } from './player';
 import { createSprite, rebakeAllSprites } from './sprites';
 
 let showHitboxes = false;
@@ -82,7 +83,10 @@ export function initDebugProps(): void {
   }
 }
 
-/** Keys 1-7 toggle rainbow unlocks; 8 toggles hitbox outlines. Dev-only. */
+/**
+ * Keys 1-7 toggle rainbow unlocks; 8 toggles hitbox outlines; 9 burst-spawns
+ * 50 enemies; 0 restores full HP. Dev-only.
+ */
 export function handleDebugKeys(): void {
   for (let i = 0; i < 7; i++) {
     if (wasPressed('Digit' + (i + 1))) {
@@ -93,6 +97,12 @@ export function handleDebugKeys(): void {
   }
   if (wasPressed('Digit8')) {
     showHitboxes = !showHitboxes;
+  }
+  if (wasPressed('Digit9')) {
+    spawnBurst(50);
+  }
+  if (wasPressed('Digit0')) {
+    player.hp = player.maxHp;
   }
 }
 
@@ -161,13 +171,32 @@ export function drawDebugOverlay(
         );
       }
     }
+    for (const enemy of enemies) {
+      const box = enemyHitbox(enemy);
+      if (
+        box.x + box.w < viewLeft ||
+        box.x > viewRight ||
+        box.y + box.h < viewTop ||
+        box.y > viewBottom
+      ) {
+        continue;
+      }
+      debugRect(ctx, Math.floor(box.x - cameraX), Math.floor(box.y - cameraY), box.w, box.h, '#f0f');
+    }
     const hit = getPlayerHitbox();
     debugRect(ctx, Math.floor(hit.x - cameraX), Math.floor(hit.y - cameraY), hit.w, hit.h, '#f00');
   }
 
   ctx.fillStyle = '#fff';
   ctx.font = '5px monospace';
-  ctx.fillText('arrows: move / 1-7: colors / 8: hitboxes', 3, viewHeight - 3);
+  ctx.fillText(
+    'arrows: move / 1-7: colors / 8: hitboxes / 9: +50 / 0: heal   enemies: ' +
+      enemies.length +
+      ' hp: ' +
+      player.hp,
+    3,
+    viewHeight - 3
+  );
 }
 
 function debugRect(

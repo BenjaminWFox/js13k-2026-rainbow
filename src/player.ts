@@ -21,7 +21,15 @@ export const player = {
   y: (MAP_HEIGHT / 2) * TILE_SIZE,
   facing: DIR_DOWN,
   moving: false,
+  // Baseline 100 HP; CON / shop Start HP raise the max in later phases
+  hp: 100,
+  maxHp: 100,
 };
+
+/** Death handling (revives, run-end overlay) lands with the run lifecycle phase. */
+export function damagePlayer(amount: number): void {
+  player.hp = Math.max(0, player.hp - amount);
+}
 
 export function updatePlayer(dt: number): void {
   let dx = 0;

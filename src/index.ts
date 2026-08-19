@@ -10,6 +10,7 @@ import {
   TARGET_VIEW_HEIGHT,
   TILE_SIZE,
 } from './constants';
+import { bakeEnemyTypes, drawEnemies, updateEnemies } from './enemies';
 import { clearPressedKeys, initInput } from './input';
 import { bakeTiles, generateMap, getTile, tileCanvases } from './map';
 import { generatePipes, pipePieces, portalBacks, portalFronts } from './pipes';
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
 
   // Single 11x19 frame, drawn 1:1 with no facing flips (behavior TBD)
   playerSprite = createSprite(PLAYER_SPRITE_X, PLAYER_SPRITE_Y, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
+  bakeEnemyTypes();
 
   generateMap();
   bakeTiles();
@@ -73,6 +75,7 @@ function gameLoop(time: number): void {
     debug.handleDebugKeys();
   }
   updatePlayer(dt);
+  updateEnemies(dt, viewWidth, viewHeight);
   render();
   clearPressedKeys();
 }
@@ -116,11 +119,27 @@ function render(): void {
     ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
   }
 
+  drawEnemies(ctx, cameraX, cameraY, viewWidth, viewHeight);
+
   for (const piece of portalFronts) {
     ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
   }
 
-  ctx.drawImage(playerSprite, Math.floor(player.x - cameraX), Math.floor(player.y - cameraY));
+  const playerScreenX = Math.floor(player.x - cameraX);
+  const playerScreenY = Math.floor(player.y - cameraY);
+  ctx.drawImage(playerSprite, playerScreenX, playerScreenY);
+
+  // HP bar: white 1px inner bar in a 1px black outline, outline top 1px below
+  // the sprite; inner width = % of HP
+  ctx.fillStyle = '#000';
+  ctx.fillRect(playerScreenX, playerScreenY + PLAYER_HEIGHT + 1, PLAYER_WIDTH, 3);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(
+    playerScreenX + 1,
+    playerScreenY + PLAYER_HEIGHT + 2,
+    Math.round((PLAYER_WIDTH - 2) * (player.hp / player.maxHp)),
+    1
+  );
 
   if (debug) {
     debug.drawDebugOverlay(
