@@ -1,13 +1,6 @@
-import {
-  MAP_HEIGHT,
-  MAP_WIDTH,
-  PLAYER_HEIGHT,
-  PLAYER_HIT,
-  PLAYER_WIDTH,
-  TILE_SIZE,
-} from './constants';
+import { MAP_HEIGHT, MAP_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH, TILE_SIZE } from './constants';
 import { hubRadiusTiles, PORTAL_CELLS } from './map';
-import { RAINBOW_COLORS } from './palette';
+import { BLUE, GREEN, ORANGE, RAINBOW_COLORS, VIOLET } from './palette';
 import { createSprite } from './sprites';
 
 export interface HitBox {
@@ -35,10 +28,10 @@ export const pipeHomes: { x: number; y: number }[] = [];
 
 let currentRun: PipePiece[] = [];
 
-const DIR_E = 0;
-const DIR_N = 1;
-const DIR_W = 2;
-const DIR_S = 3;
+export const DIR_E = 0;
+export const DIR_N = 1;
+export const DIR_W = 2;
+export const DIR_S = 3;
 
 const WORLD_W = MAP_WIDTH * TILE_SIZE;
 const WORLD_H = MAP_HEIGHT * TILE_SIZE;
@@ -59,17 +52,10 @@ const PORTAL_W = 12;
 const PORTAL_H = 23;
 const PIPE_H = 6;
 
-// Horizontal straight end-to-end with 1px outline overlap
-const ADVANCE = 8;
+/** Horizontal straight end-to-end with 1px outline overlap. */
+export const ADVANCE = 8;
 // Cross-section center of metal port (rows/cols 1–4)
 const PORT = 2.5;
-
-// Occupancy grid: keep a player-sized gap between pipe solids
-const CELL = 4;
-const CLEAR = PLAYER_HIT + 1;
-const GRID_W = Math.ceil(WORLD_W / CELL);
-const GRID_H = Math.ceil(WORLD_H / CELL);
-let blocked: Uint8Array;
 
 /** Authored stripe / cap-dot on the sheet; remapped per pipe to a rainbow color. */
 const PIPE_STRIPE = 0xb1b1b1;
@@ -109,69 +95,12 @@ let curves: CurveOrient[];
 /** caps[dir][0|1] — long border against pipe; [1] = flipped accent */
 let caps: HTMLCanvasElement[][];
 
-function mulberry32(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state |= 0;
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function opposite(dir: number): number {
+export function opposite(dir: number): number {
   return (dir + 2) % 4;
 }
 
-function isHorizontal(dir: number): boolean {
+export function isHorizontal(dir: number): boolean {
   return dir === DIR_E || dir === DIR_W;
-}
-
-function resetBlocked(): void {
-  blocked = new Uint8Array(GRID_W * GRID_H);
-}
-
-function boxBlocked(x: number, y: number, w: number, h: number): boolean {
-  if (
-    x < TILE_SIZE ||
-    y < TILE_SIZE ||
-    x + w > WORLD_W - TILE_SIZE ||
-    y + h > WORLD_H - TILE_SIZE
-  ) {
-    return true;
-  }
-  const x0 = Math.max(0, Math.floor(x / CELL));
-  const y0 = Math.max(0, Math.floor(y / CELL));
-  const x1 = Math.min(GRID_W - 1, Math.floor((x + w - 1) / CELL));
-  const y1 = Math.min(GRID_H - 1, Math.floor((y + h - 1) / CELL));
-  for (let gy = y0; gy <= y1; gy++) {
-    for (let gx = x0; gx <= x1; gx++) {
-      if (blocked[gy * GRID_W + gx]) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function stampBox(x: number, y: number, w: number, h: number): void {
-  const x0 = Math.max(0, Math.floor((x - CLEAR) / CELL));
-  const y0 = Math.max(0, Math.floor((y - CLEAR) / CELL));
-  const x1 = Math.min(GRID_W - 1, Math.floor((x + w - 1 + CLEAR) / CELL));
-  const y1 = Math.min(GRID_H - 1, Math.floor((y + h - 1 + CLEAR) / CELL));
-  for (let gy = y0; gy <= y1; gy++) {
-    for (let gx = x0; gx <= x1; gx++) {
-      blocked[gy * GRID_W + gx] = 1;
-    }
-  }
-}
-
-function stampPieces(from: number, to: number): void {
-  for (let i = from; i < to; i++) {
-    const piece = pipePieces[i];
-    stampBox(piece.x, piece.y, piece.canvas.width, piece.canvas.height);
-  }
 }
 
 /** Flip then rot90 CCW a point from source (w×h) space into dest local space. */
@@ -347,7 +276,7 @@ function findCurve(enterSide: number, exitSide: number, enterFlip: boolean): Cur
   return curves[0];
 }
 
-function straightPreview(
+export function straightPreview(
   cx: number,
   cy: number,
   dir: number
@@ -378,7 +307,7 @@ function straightPreview(
   };
 }
 
-function curvePreview(
+export function curvePreview(
   cx: number,
   cy: number,
   dirIn: number,
@@ -454,7 +383,7 @@ function curveArmHits(x: number, y: number, curve: CurveOrient): HitBox[] {
   return hits;
 }
 
-function pushStraight(
+export function pushStraight(
   cx: number,
   cy: number,
   dir: number,
@@ -478,7 +407,7 @@ function pushStraight(
   return { cx, cy: cy - ADVANCE };
 }
 
-function pushCurve(
+export function pushCurve(
   cx: number,
   cy: number,
   dirIn: number,
@@ -508,7 +437,7 @@ function pushCurve(
   return { cx: x + exit.x, cy: y + exit.y, hFlip, vFlip };
 }
 
-function pushCap(cx: number, cy: number, dir: number, hFlip: boolean, vFlip: boolean): void {
+export function pushCap(cx: number, cy: number, dir: number, hFlip: boolean, vFlip: boolean): void {
   const flip = isHorizontal(dir) ? hFlip : vFlip;
   const canvas = caps[dir][flip ? 1 : 0];
   // Long border faces the pipe; 1px overlap into the run.
@@ -535,134 +464,133 @@ function pushPortal(portalX: number, portalY: number, emergeEast: boolean): void
   }
 }
 
+const SLOT = WORLD_W / 10;
+const INSET = 75;
+/** Portal Y so the pipe through the seam sits on `CENTER_Y`. */
+const PORTAL_PIPE_OFF_Y = PORTAL_H - 1 - PIPE_H + PORT;
+
+const MODE_STRAIGHT = 0;
+const MODE_STRAIGHT_PORTAL_CURVE = 1;
+const MODE_DIAGONAL = 2;
+
+function pipeMode(color: number): number {
+  if (color === GREEN || color === BLUE) {
+    return MODE_STRAIGHT;
+  }
+  if (color === ORANGE || color === VIOLET) {
+    return MODE_STRAIGHT_PORTAL_CURVE;
+  }
+  return MODE_DIAGONAL;
+}
+
+function alongRemaining(cx: number, cy: number, dir: number, tx: number, ty: number): number {
+  if (dir === DIR_E) {
+    return tx - cx;
+  }
+  if (dir === DIR_W) {
+    return cx - tx;
+  }
+  if (dir === DIR_S) {
+    return ty - cy;
+  }
+  return cy - ty;
+}
+
+function walkStraight(
+  cx: number,
+  cy: number,
+  dir: number,
+  hFlip: boolean,
+  vFlip: boolean,
+  targetX: number,
+  targetY: number
+): { cx: number; cy: number } {
+  let steps = 0;
+  while (steps++ < 400 && alongRemaining(cx, cy, dir, targetX, targetY) > ADVANCE) {
+    const next = pushStraight(cx, cy, dir, hFlip, vFlip);
+    cx = next.cx;
+    cy = next.cy;
+  }
+  return { cx, cy };
+}
+
 /**
- * Build one pipe: walk from a portal toward a cap target near the player.
- * Run lengths between elbows are randomized, straights sometimes overshoot
- * the ideal turn point, and far from the target the pipe may detour away
- * before curling back — so runs read as S/C shapes rather than a fixed zigzag.
- * Placements keep a player-width gap from other pipes and from this pipe's
- * own earlier segments (the newest few are exempt so it can extend itself).
+ * Competition layout: cardinals are a single heading (verticals elbow once
+ * out of the east/west-facing portal); diagonals alternate straight / curve.
+ * The occupancy-grid snake lives in `src/directors-cut/pipe-snake.ts`.
  */
-function buildPipe(
+function buildPipeSimple(
+  color: number,
   startX: number,
   startY: number,
   startDir: number,
   targetX: number,
-  targetY: number,
-  random: () => number
+  targetY: number
 ): void {
+  const mode = pipeMode(color);
   let cx = startX;
   let cy = startY;
   let dir = startDir;
   let hFlip = false;
   let vFlip = false;
 
-  const ownBoxes: { x: number; y: number; w: number; h: number }[] = [];
-  // Exempt the newest pieces: CLEAR (12px) dilation reaches back past an
-  // elbow, so the window must span ~3 pieces on each side of a corner.
-  // The tightest possible loop is 8+ pieces, so 6 still catches crossings.
-  const SELF_SKIP = 6;
-  const selfHit = (x: number, y: number, w: number, h: number): boolean => {
-    for (let i = 0; i < ownBoxes.length - SELF_SKIP; i++) {
-      const b = ownBoxes[i];
-      if (
-        x < b.x + b.w + CLEAR &&
-        x + w > b.x - CLEAR &&
-        y < b.y + b.h + CLEAR &&
-        y + h > b.y - CLEAR
-      ) {
-        return true;
-      }
-    }
-    return false;
-  };
-  const isFree = (p: { x: number; y: number; w: number; h: number }): boolean =>
-    !boxBlocked(p.x, p.y, p.w, p.h) && !selfHit(p.x, p.y, p.w, p.h);
-  const tryCurve = (out: number) => {
-    if ((out + dir) % 2 !== 1) {
-      return null;
-    }
-    const p = curvePreview(cx, cy, dir, out, hFlip, vFlip);
-    return p && isFree(p) ? p : null;
-  };
+  if (mode === MODE_STRAIGHT_PORTAL_CURVE) {
+    const runDir = color === ORANGE ? DIR_S : DIR_N;
+    const turned = pushCurve(cx, cy, dir, runDir, hFlip, vFlip);
+    cx = turned.cx;
+    cy = turned.cy;
+    hFlip = turned.hFlip;
+    vFlip = turned.vFlip;
+    dir = runDir;
+  }
+
+  if (mode !== MODE_DIAGONAL) {
+    const end = walkStraight(cx, cy, dir, hFlip, vFlip, targetX, targetY);
+    pushCap(end.cx, end.cy, dir, hFlip, vFlip);
+    return;
+  }
 
   let steps = 0;
-  const maxSteps = 600;
-  let sinceTurn = 0;
-  // Segments before the next optional turn; re-rolled after every elbow.
-  let runLen = 2 + Math.floor(random() * 5);
-
-  while (steps < maxSteps) {
-    const needX = targetX - cx;
-    const needY = targetY - cy;
-    if (Math.abs(needX) <= ADVANCE && Math.abs(needY) <= ADVANCE) {
+  while (steps++ < 400) {
+    if (Math.abs(targetX - cx) <= ADVANCE && Math.abs(targetY - cy) <= ADVANCE) {
       break;
     }
-
-    // Perpendicular turn that closes the cross-axis error, and its mirror.
-    const toward = isHorizontal(dir) ? (needY > 0 ? DIR_S : DIR_N) : needX > 0 ? DIR_E : DIR_W;
-    const away = opposite(toward);
-    const crossErr = isHorizontal(dir) ? Math.abs(needY) : Math.abs(needX);
-    const along = isHorizontal(dir) ? needX : needY;
-    const forward = dir === DIR_E || dir === DIR_S ? along : -along;
-
-    let turnTo = -1;
-    if (sinceTurn >= runLen) {
-      const roll = random();
-      if (forward < 0 || (crossErr > ADVANCE && roll < 0.7)) {
-        turnTo = toward;
-      } else if (roll < 0.25 && Math.hypot(needX, needY) > 120) {
-        turnTo = away;
-      }
+    if (alongRemaining(cx, cy, dir, targetX, targetY) > ADVANCE) {
+      const next = pushStraight(cx, cy, dir, hFlip, vFlip);
+      cx = next.cx;
+      cy = next.cy;
     }
-    let curveP = turnTo >= 0 ? tryCurve(turnTo) : null;
-
-    if (!curveP) {
-      const sp = straightPreview(cx, cy, dir);
-      if (isFree(sp)) {
-        pushStraight(cx, cy, dir, hFlip, vFlip);
-        ownBoxes.push({ x: sp.x, y: sp.y, w: sp.w, h: sp.h });
-        cx = sp.nx;
-        cy = sp.ny;
-        sinceTurn++;
-        steps++;
-        continue;
-      }
-      // Straight blocked: forced turn, target side first.
-      turnTo = toward;
-      curveP = tryCurve(toward);
-      if (!curveP) {
-        turnTo = away;
-        curveP = tryCurve(away);
-      }
-      if (!curveP) {
-        break;
-      }
+    if (Math.abs(targetX - cx) <= ADVANCE && Math.abs(targetY - cy) <= ADVANCE) {
+      break;
     }
-
+    const turnTo = isHorizontal(dir)
+      ? targetY > cy
+        ? DIR_S
+        : DIR_N
+      : targetX > cx
+        ? DIR_E
+        : DIR_W;
+    const cross = isHorizontal(dir) ? Math.abs(targetY - cy) : Math.abs(targetX - cx);
+    if (cross <= ADVANCE || (turnTo + dir) % 2 !== 1) {
+      const end = walkStraight(cx, cy, dir, hFlip, vFlip, targetX, targetY);
+      cx = end.cx;
+      cy = end.cy;
+      break;
+    }
     const next = pushCurve(cx, cy, dir, turnTo, hFlip, vFlip);
-    ownBoxes.push({ x: curveP.x, y: curveP.y, w: curveP.w, h: curveP.h });
     cx = next.cx;
     cy = next.cy;
     hFlip = next.hFlip;
     vFlip = next.vFlip;
     dir = turnTo;
-    sinceTurn = 0;
-    runLen = 1 + Math.floor(random() * 6);
-    steps++;
   }
-
   pushCap(cx, cy, dir, hFlip, vFlip);
 }
 
-const SLOT = WORLD_W / 10;
-
 function portalFromCell(
   gx: number,
-  gy: number,
-  random: () => number
+  gy: number
 ): { portalX: number; portalY: number; emergeEast: boolean } {
-  const inset = 60 + Math.floor(random() * 31);
   const cellX = (gx + 0.5) * SLOT;
   const cellY = (gy + 0.5) * SLOT;
   const yMin = TILE_SIZE + 4;
@@ -672,14 +600,14 @@ function portalFromCell(
 
   if (gx === 0) {
     return {
-      portalX: inset,
+      portalX: INSET,
       portalY: Math.max(yMin, Math.min(yMax, cellY - PORTAL_H / 2)),
       emergeEast: true,
     };
   }
   if (gx === 9) {
     return {
-      portalX: WORLD_W - PORTAL_W - inset,
+      portalX: WORLD_W - PORTAL_W - INSET,
       portalY: Math.max(yMin, Math.min(yMax, cellY - PORTAL_H / 2)),
       emergeEast: false,
     };
@@ -687,36 +615,63 @@ function portalFromCell(
   if (gy === 0) {
     return {
       portalX: Math.max(xMin, Math.min(xMax, cellX - PORTAL_W / 2)),
-      portalY: inset,
+      portalY: INSET,
       emergeEast: cellX < CENTER_X,
     };
   }
   return {
     portalX: Math.max(xMin, Math.min(xMax, cellX - PORTAL_W / 2)),
-    portalY: WORLD_H - PORTAL_H - inset,
+    portalY: WORLD_H - PORTAL_H - INSET,
     emergeEast: cellX < CENTER_X,
   };
 }
 
+function placePortal(
+  color: number,
+  gx: number,
+  gy: number
+): { portalX: number; portalY: number; emergeEast: boolean } {
+  if (color === GREEN) {
+    return { portalX: INSET, portalY: CENTER_Y - PORTAL_PIPE_OFF_Y, emergeEast: true };
+  }
+  if (color === BLUE) {
+    return {
+      portalX: WORLD_W - PORTAL_W - INSET,
+      portalY: CENTER_Y - PORTAL_PIPE_OFF_Y,
+      emergeEast: false,
+    };
+  }
+  if (color === ORANGE) {
+    return { portalX: CENTER_X - PORTAL_W / 2, portalY: INSET, emergeEast: true };
+  }
+  if (color === VIOLET) {
+    return {
+      portalX: CENTER_X - PORTAL_W / 2,
+      portalY: WORLD_H - PORTAL_H - INSET,
+      emergeEast: true,
+    };
+  }
+  return portalFromCell(gx, gy);
+}
+
 /**
- * Place 7 portals from the 10×10 edge map and grow a pipe from each toward
- * a cap just outside the white hub (still on that pipe's color), keeping a
- * player-width gap from other pipes.
+ * Place 7 portals and grow a pipe from each toward a cap just outside the
+ * white hub. Competition build uses straight / diagonal layouts.
+ *
+ * Director's cut: swap `buildPipeSimple` for `buildPipeSnake` from
+ * `src/directors-cut/pipe-snake.ts` (see SPEC.md §1 Director's Cut).
  */
-export function generatePipes(seed: number): void {
+export function generatePipes(_seed: number): void {
   pipePieces.length = 0;
   portalBacks.length = 0;
   portalFronts.length = 0;
   pipeRuns.length = 0;
   pipeHomes.length = 0;
   bakePieces();
-  resetBlocked();
-
-  const random = mulberry32(seed);
 
   for (let i = 0; i < 7; i++) {
     const [gx, gy] = PORTAL_CELLS[i];
-    const { portalX, portalY, emergeEast } = portalFromCell(gx, gy, random);
+    const { portalX, portalY, emergeEast } = placePortal(i, gx, gy);
 
     const seamX = portalX + PORTAL_LEFT.w;
     const cy = portalY + PORTAL_H - 1 - PIPE_H + PORT;
@@ -727,7 +682,6 @@ export function generatePipes(seed: number): void {
     const dy = cy - CENTER_Y;
     const len = Math.hypot(dx, dy) || 1;
     const ang = Math.atan2(dy, dx);
-    // One tile past the hub edge so the cap sits on color, not white
     const capDist = (hubRadiusTiles(ang) + 1) * TILE_SIZE;
     const targetX = CENTER_X + (dx / len) * capDist;
     const targetY = CENTER_Y + (dy / len) * capDist;
@@ -740,10 +694,7 @@ export function generatePipes(seed: number): void {
       x: emergeEast ? portalX + PORTAL_W + 4 : portalX - PLAYER_WIDTH - 4,
       y: portalY + PORTAL_H - PLAYER_HEIGHT,
     });
-    const from = pipePieces.length;
-    buildPipe(startX, cy, dir, targetX, targetY, random);
-    stampPieces(from, pipePieces.length);
-    stampBox(portalX, portalY, PORTAL_W, PORTAL_H);
+    buildPipeSimple(i, startX, cy, dir, targetX, targetY);
   }
 }
 

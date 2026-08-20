@@ -37,13 +37,26 @@ These rules govern how code is written for this project.
      1. Opening cutscene becomes static dialogue panels (no choreographed movement).
      2. Cut surge spawns and the stretch difficulty modes.
      3. Drop scrap-shop rows (never the whole shop).
-     4. Straighten the procedural pipes (saves code, not data — a few hundred bytes).
+     4. Straighten the procedural pipes — **done for the competition build** (simple
+        straight / diagonal layouts). The old snake walker is kept for the Director's Cut
+        (rule 10), not deleted.
      5. Shrink the audio reservation.
 7. **No external dependencies at runtime.** Everything is hand-rolled or vendored (ZzFX/ZzFXM
    already vendored in the sample).
 8. **TypeScript strictness stays on.** Types are free — they're erased at build time.
 9. **Dev tooling is isolated.** Debug keys/overlays live in `src/debug.ts` and are loaded
    only behind `import.meta.env.DEV`, so they are not part of the production entry.
+10. **Director's Cut.** Features cut for the 13 KB zip stay in the repo, isolated so they
+    are **not imported by the production entry** (tree-shaking keeps them out of the zip).
+    Do not delete them. After the competition they can be wired back for a richer build.
+    When cutting something this way: move it under `src/directors-cut/`, leave a comment at
+    the old call site explaining the swap, and add a row to the list below.
+
+    Currently isolated:
+
+    | Module | What it restores | How to enable |
+    |--------|------------------|---------------|
+    | [`src/directors-cut/pipe-snake.ts`](src/directors-cut/pipe-snake.ts) | Occupancy-grid snake pipes (S/C shapes, random run lengths, jittered portal insets) | In `generatePipes` (`src/pipes.ts`), call `buildPipeSnake(...)` instead of `buildPipeSimple`; optionally use `portalFromCellRandom` |
 
 All timing in this spec is expressed in **real time** (seconds/minutes), never frames.
 
@@ -503,12 +516,17 @@ No font lives on the sprite sheet. Text uses a **bit-packed 3×5 pixel font**:
 - The plaza is plain walkable ground; the final-boss/cutscene **portal opens on its right
   side**. Water and bushes were removed; if water returns, it blocks the player but not
   enemies.
-- **Pipes (procedural):** 7 portals follow a 10×10 edge map (cells `(0,0)`,
-  `(5,0)`, `(9,1)`, `(0,5)`, `(9,6)`, `(1,9)`, `(6,9)`), inset ~75px (±15) from
-  that edge. Default portal faces east (horizontal straight through the seam);
-  west-side portals are flipH. Each pipe snakes inward along its own spoke and ends at a
-  cap **near the inner edge of its color slice**, just outside the plaza hub, keeping a
-  player-width (**11px**) gap from other pipes.
+- **Pipes (competition layout):** 7 portals on a 10×10 edge map (cells `(0,0)` red NW,
+  `(5,0)` orange N, `(9,0)` yellow NE, `(0,5)` green W, `(9,5)` blue E, `(0,9)` indigo SW,
+  `(5,9)` violet S), inset 75px. Default portal faces east (horizontal through the seam);
+  west-side portals are flipH. Two run modes only:
+  - **Straight** — one heading from portal to hub. Green: left → right. Blue: right → left.
+    Orange: top → bottom with **one curve** out of the portal (portals face E/W). Violet:
+    bottom → top with the same portal curve.
+  - **Diagonal** — alternating straight / curve. Red: top-left → bottom-right. Yellow:
+    top-right → bottom-left. Indigo: bottom-left → top-right.
+  Cardinals sit on the world midlines so a single heading hits the hub. Each run ends at a
+  cap just outside the plaza hub (still on that pipe's color).
   Built from straight + curve + cap only. Caps seal inward ends; portal origin
   has no cap. Each run is assigned one rainbow color; the authored `b1b1b1`
   center stripe (dot on caps) is remapped to that color at bake and **stays
@@ -516,9 +534,13 @@ No font lives on the sprite sheet. Text uses a **bit-packed 3×5 pixel font**:
   when an elbow's port has the highlight on the opposite side — H uses flipV
   (accent top), V uses flipV+rot90 (accent left). Outer + inner elbows cover all
   four corners at both accent modes.
+  The old occupancy-grid snake (S/C shapes, random run lengths, player-width gaps, jittered
+  insets) is **Director's Cut** — [`src/directors-cut/pipe-snake.ts`](src/directors-cut/pipe-snake.ts),
+  not shipped. See §1 rule 10.
 - Pipes block **player movement** only: enemies walk over them, projectiles fly over them.
-- **Authoring: hybrid** — pipes and slices are seeded procedural; any future landmarks /
-  major walls would be hand-placed with seeded decoration/fill.
+- **Authoring: hybrid** — competition pipes are the two simple modes above; ground slices
+  still aim at the portal cells. The Director's Cut snake is seeded procedural. Any future
+  landmarks / major walls would be hand-placed with seeded decoration/fill.
 
 ### Game state
 

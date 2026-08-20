@@ -1,15 +1,15 @@
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
 import { cssColor, RAINBOW_COLORS, rainbowShade } from './palette';
 
-/** 10×10 map of portal cells (red pixels); (0,0) is top-left. */
+/** 10×10 map of portal cells (red pixels); (0,0) is top-left. Cardinals on midlines. */
 export const PORTAL_CELLS: [number, number][] = [
   [0, 0],
   [5, 0],
-  [9, 1],
+  [9, 0],
   [0, 5],
-  [9, 6],
-  [1, 9],
-  [6, 9],
+  [9, 5],
+  [0, 9],
+  [5, 9],
 ];
 
 /** Ground tiles 0–6 match RAINBOW_COLORS / pipe kits. */
