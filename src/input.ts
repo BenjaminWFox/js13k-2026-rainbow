@@ -1,5 +1,3 @@
-import { unlockAudio } from './audio';
-
 const downKeys = new Set<string>();
 const pressedKeys = new Set<string>();
 
@@ -11,7 +9,6 @@ export const mouse = {
 
 export function initInput(canvas: HTMLCanvasElement): void {
   window.addEventListener('keydown', (event) => {
-    unlockAudio();
     if (!event.repeat) {
       pressedKeys.add(event.code);
     }
@@ -31,7 +28,6 @@ export function initInput(canvas: HTMLCanvasElement): void {
   };
   canvas.addEventListener('mousemove', syncMouse);
   canvas.addEventListener('mousedown', (event) => {
-    unlockAudio();
     if (event.button === 0) {
       syncMouse(event);
       mouse.clicked = true;

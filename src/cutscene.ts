@@ -1,4 +1,3 @@
-import { playPipe } from './audio';
 import { PLAYER_HEIGHT, PLAYER_WIDTH, WALK_FRAME_MS } from './constants';
 import { finalBossSprites, minibossSprites } from './enemies';
 import { bakeText, FONT_H, measureText } from './font';
@@ -215,7 +214,6 @@ export function updateCutscene(dt: number): void {
     }
     while (revealed < 7 && t >= REVEAL_AT + revealed * REVEAL_GAP_MS) {
       revealed++;
-      playPipe();
     }
     while (drained < 7 && t >= DRAIN_AT + drained * DRAIN_GAP_MS) {
       drainNextColor();

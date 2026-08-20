@@ -1,4 +1,3 @@
-import { playPickup } from './audio';
 import { bakeText, FONT_H } from './font';
 import { mouse, wasPressed } from './input';
 
@@ -162,7 +161,6 @@ export function updateUi(viewWidth: number, viewHeight: number): void {
   }
   layoutUi(viewWidth, viewHeight);
   const n = labels.length;
-  const prev = selected;
   if (
     wasPressed('ArrowLeft') ||
     wasPressed('KeyA') ||
@@ -184,13 +182,9 @@ export function updateUi(viewWidth: number, viewHeight: number): void {
       selected = i;
     }
   }
-  if (selected !== prev) {
-    playPickup();
-  }
   const confirmKey = wasPressed('Enter') || wasPressed('NumpadEnter');
   const confirmClick = mouse.clicked && pointIn(mouse.x, mouse.y, rects[selected]);
   if (confirmKey || confirmClick) {
-    playPickup();
     onPick(selected);
   }
 }

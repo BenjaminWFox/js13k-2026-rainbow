@@ -17,7 +17,7 @@ export const MAP_WIDTH = 100;
 export const MAP_HEIGHT = 100;
 
 // Pixels per millisecond
-export const PLAYER_SPEED = 0.05;
+export const PLAYER_SPEED = 0.25;
 
 // Walk-cycle cadence (§3 Animation): ms per leg-cut frame while moving
 export const WALK_FRAME_MS = 150;
