@@ -1,3 +1,4 @@
+import { playPipe, playSuccess } from './audio';
 import { primeFinalePowers, resetCombat } from './combat';
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
 import { startCutscene } from './cutscene';
@@ -50,10 +51,19 @@ const PHASE_PIPE = 0;
 const PHASE_WAVE = 1;
 const PIPE_GAP_MS = 45;
 const WAVE_SPEED = 0.38;
+const SUCCESS_AFTER_PIPE_MS = 280;
 
 let pauseOpen = false;
 let hand: DraftCard[] = [];
-let seq: { phase: number; color: number; x: number; y: number; wait: number } | null = null;
+let seq: {
+  phase: number;
+  color: number;
+  x: number;
+  y: number;
+  wait: number;
+  firstPipe: boolean;
+  successIn: number;
+} | null = null;
 let finaleStarted = false;
 
 export const colorWave = { active: false, x: 0, y: 0, r: 0 };
@@ -297,12 +307,20 @@ export function startPendingDeathSequence(
     x: death.x,
     y: death.y,
     wait: 0,
+    firstPipe: true,
+    successIn: 0,
   };
 }
 
 export function updateSequence(dt: number): void {
   if (!seq) {
     return;
+  }
+  if (seq.successIn > 0) {
+    seq.successIn -= dt;
+    if (seq.successIn <= 0) {
+      playSuccess();
+    }
   }
   if (seq.phase === PHASE_PIPE) {
     seq.wait += dt;
@@ -312,6 +330,11 @@ export function updateSequence(dt: number): void {
       if (!piece) {
         beginWave(seq.color, seq.x, seq.y);
         return;
+      }
+      if (seq.firstPipe) {
+        playPipe();
+        seq.firstPipe = false;
+        seq.successIn = SUCCESS_AFTER_PIPE_MS;
       }
       const cx = piece.x + piece.canvas.width / 2;
       const cy = piece.y + piece.canvas.height / 2;
@@ -352,6 +375,7 @@ export function updateOverlays(viewWidth: number, viewHeight: number): void {
     updateUi(viewWidth, viewHeight);
   }
   if (takeSlainFinalBoss()) {
+    playSuccess();
     enqueueOverlay(openWin);
   }
   if (scene === SCENE_RUN && !isUiOpen() && !seq && player.hp <= 0 && overlayQueue.length === 0) {

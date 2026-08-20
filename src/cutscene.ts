@@ -1,3 +1,4 @@
+import { playPipe } from './audio';
 import { PLAYER_HEIGHT, PLAYER_WIDTH, WALK_FRAME_MS } from './constants';
 import { finalBossSprites, minibossSprites } from './enemies';
 import { bakeText, FONT_H, measureText } from './font';
@@ -212,8 +213,9 @@ export function updateCutscene(dt: number): void {
     if (!boss.shown && portalAlpha > 0) {
       portalAlpha = Math.max(0, portalAlpha - dt / PORTAL_FADE_MS);
     }
-    if (t >= REVEAL_AT) {
-      revealed = Math.min(7, 1 + Math.floor((t - REVEAL_AT) / REVEAL_GAP_MS));
+    while (revealed < 7 && t >= REVEAL_AT + revealed * REVEAL_GAP_MS) {
+      revealed++;
+      playPipe();
     }
     while (drained < 7 && t >= DRAIN_AT + drained * DRAIN_GAP_MS) {
       drainNextColor();

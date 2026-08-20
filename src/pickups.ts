@@ -1,3 +1,4 @@
+import { playPickup } from './audio';
 import { PLAYER_SPEED, PLAYER_WIDTH } from './constants';
 import { getPlayerHitbox } from './player';
 import { createSprite } from './sprites';
@@ -150,6 +151,7 @@ export function updatePickups(dt: number): void {
     }
 
     if (p.x < hit.x + hit.w && p.x + pw > hit.x && p.y < hit.y + hit.h && p.y + ph > hit.y) {
+      playPickup();
       if (p.kind === PICKUP_CRYSTAL) {
         addXp(1);
       } else {

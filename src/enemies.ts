@@ -7,7 +7,8 @@ import {
   TILE_SIZE,
   WALK_FRAME_MS,
 } from './constants';
-import { spawnExplosion } from './fx';
+import { playHit } from './audio';
+import { spawnDamageNumber, spawnExplosion } from './fx';
 import { getTile, TILE_WALL } from './map';
 import { RAINBOW_COLORS } from './palette';
 import { dropBossLoot, dropLoot } from './pickups';
@@ -682,12 +683,14 @@ export function crowdControlAt(x: number, y: number, radius: number, freezeMs: n
 /** Returns true if the enemy died. Safe to call while reverse-iterating `enemies`. */
 export function hurtEnemyAt(index: number, amount: number): boolean {
   const enemy = enemies[index];
+  playHit();
   if (enemy.frozen > 0) {
     amount *= 1.25;
   }
   const box = enemyHitbox(enemy);
   const cx = box.x + box.w / 2;
   const cy = box.y + box.h / 2;
+  spawnDamageNumber(cx, enemy.y - 6, amount);
   if (enemy.shield > 0) {
     const used = Math.min(enemy.shield, amount);
     enemy.shield -= used;

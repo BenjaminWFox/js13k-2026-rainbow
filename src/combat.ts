@@ -1,3 +1,4 @@
+import { playExplosion, playHorn } from './audio';
 import { PLAYER_HEIGHT, PLAYER_WIDTH, TILE_SIZE } from './constants';
 import {
   applyKnockback,
@@ -334,6 +335,7 @@ function fireHorn(): void {
   hornFrom.x = (boxBackX + spriteFrontX) / 2;
   hornFrom.y = (boxBackY + spriteFrontY) / 2;
   hornFlash = HORN_FLASH_MS;
+  playHorn();
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemyHitbox(enemies[i]);
     if (overlaps(hornBox.x, hornBox.y, hornBox.w, hornBox.h, enemy.x, enemy.y, enemy.w, enemy.h)) {
@@ -345,6 +347,7 @@ function fireHorn(): void {
 function fireStomp(): void {
   const center = playerCenter();
   stompFlash = STOMP_FLASH_MS;
+  playExplosion();
   for (let i = enemies.length - 1; i >= 0; i--) {
     const box = enemyHitbox(enemies[i]);
     const ex = box.x + box.w / 2;
@@ -535,6 +538,7 @@ export function fireNova(
   friendly: boolean
 ): void {
   novas.push({ x, y, radius, life: NOVA_FLASH_MS, maxLife: NOVA_FLASH_MS, color });
+  playExplosion();
   if (friendly) {
     for (let i = enemies.length - 1; i >= 0; i--) {
       const enemy = enemies[i];

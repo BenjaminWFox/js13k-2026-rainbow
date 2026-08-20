@@ -394,6 +394,13 @@ guards/steals.
 - **Deferred.** ZzFX (SFX) and ZzFXM (music) are vendored and available; audio design decided
   once core gameplay is working.
   - *Idea to explore:* a music track that gains instruments/richness as colors return.
+  - SFX:
+    - Pipe laying and pipe destruction: zzfx(...[1.64,,150,,.08,.13,4,2.84,.1,.1,10,,.07,1.7,1,.1,.09,.8,.08]); // Hit 66
+    - Success (beat a boss): zzfx(...[.6,,334,.07,1,.16,,.9,,,200,.06,.06,,,,,.64,.24,,297]); // Powerup 1077
+    - Pickup (crystal/scrap) AND button move/click: zzfx(...[,,507,,.04,.11,1,,,,250,.04,,,,,,.74,.02,,-1380]); // Pickup 1044
+    - Stomp & magic/nova attacks: zzfx(...[,,91,.04,.04,.51,5,.1,-2,5,,,,1.9,,.9,,.44,.15]); // Explosion 1071
+    - Enemy is hit: zzfx(...[5,,266,.02,.05,.04,,3,-1,,,,,1.2,2.1,,,.88,.07,,1914]); // Hit 1046
+    - Horn attack: zzfx(...[,,172,.01,.04,.16,4,.2,8,,,,,1.5,,.1,,.45,.06]); // Hit 1082
 
 ---
 
