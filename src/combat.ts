@@ -14,11 +14,13 @@ import { RAINBOW_COLORS, unlockedColors } from './palette';
 import { damagePlayer, freezePlayer, getPlayerHitbox, player } from './player';
 import { hornPwr, novaPwr } from './stats';
 
-const HORN_COOLDOWN_MS = 650;
+const HORN_MS = 250;
+const HORN_BEATS = 6;
 const HORN_DAMAGE = 10;
-const HORN_FORWARD = 35;
-const HORN_WIDTH = 13 * 1.5;
-const HORN_FLASH_MS = 150;
+/** Tip reach from the sprite's left/right edge. */
+const HORN_LEN = 35;
+/** Visual half-height of the chevron. */
+const HORN_SPREAD = 8;
 
 const STOMP_DAMAGE = 5;
 const NOVA_RADIUS = 66;
@@ -52,14 +54,13 @@ const N_INDIGO = 64;
 const N_VIOLET = 128;
 const N_FINALE = N_RED | N_ORANGE | N_GREEN | N_BLUE | N_INDIGO | N_VIOLET;
 
-let hornCd = 0;
 let novaCd = 0;
-let hornFlash = 0;
-
-const hornBox = { x: 0, y: 0, w: 0, h: 0 };
-let hornFaceX = 1;
-let hornFaceY = 0;
-const hornFrom = { x: 0, y: 0 };
+/** Time remaining in the current 250ms beat. */
+let hornT = 0;
+/** 0–1 = right/left lash, 2–5 = rest. Starts at 5 so the first tick wraps to 0. */
+let hornBeat = 5;
+/** 1 = right, -1 = left. Starts at -1 so the first fire flips to right. */
+let hornDir = -1;
 
 interface Bolt {
   x: number;
@@ -90,40 +91,20 @@ let viewY = 0;
 let viewW = 1;
 let viewH = 1;
 
+/** Vertical center of the sprite. Follows player.x/y. */
+function hornY(): number {
+  return player.y + PLAYER_HEIGHT / 2;
+}
+
 function hornHitbox(): { x: number; y: number; w: number; h: number } {
-  const center = playerCenter();
-  const sl = player.x;
-  const st = player.y;
-  const sr = player.x + PLAYER_WIDTH;
-  const sb = player.y + PLAYER_HEIGHT;
-  let x0 = sl;
-  let y0 = st;
-  let x1 = sr;
-  let y1 = sb;
-
-  // Expand only in facing directions so the trailing sprite corner stays flush
-  // (e.g. down-left starts at the sprite's top-right, not past it).
-  if (player.faceX < 0) {
-    x0 = center.x - HORN_FORWARD;
-  } else if (player.faceX > 0) {
-    x1 = center.x + HORN_FORWARD;
-  }
-  if (player.faceY < 0) {
-    y0 = center.y - HORN_FORWARD;
-  } else if (player.faceY > 0) {
-    y1 = center.y + HORN_FORWARD;
-  }
-
-  // 50% wider than the original 13px poke, on the axis perpendicular to facing
-  if (player.faceY === 0) {
-    y0 = Math.min(y0, center.y - HORN_WIDTH / 2);
-    y1 = Math.max(y1, center.y + HORN_WIDTH / 2);
-  } else if (player.faceX === 0) {
-    x0 = Math.min(x0, center.x - HORN_WIDTH / 2);
-    x1 = Math.max(x1, center.x + HORN_WIDTH / 2);
-  }
-
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  const h = HORN_SPREAD * 4.5;
+  const w = HORN_LEN * 1.5;
+  return {
+    x: player.x + (hornDir > 0 ? PLAYER_WIDTH : -w),
+    y: hornY() - h / 2,
+    w,
+    h,
+  };
 }
 
 function playerCenter(): { x: number; y: number } {
@@ -208,12 +189,13 @@ export function updateCombat(
   viewW = viewWidth;
   viewH = viewHeight;
 
-  hornFlash = Math.max(0, hornFlash - dt);
-
-  hornCd -= dt;
-  if (hornCd <= 0) {
-    fireHorn();
-    hornCd += HORN_COOLDOWN_MS;
+  hornT -= dt;
+  if (hornT <= 0) {
+    hornT += HORN_MS;
+    hornBeat = (hornBeat + 1) % HORN_BEATS;
+    if (hornBeat < 2) {
+      fireHorn();
+    }
   }
 
   novaCd -= dt;
@@ -239,41 +221,20 @@ export function updateCombat(
 }
 
 export function resetCombat(): void {
-  hornCd = 0;
   novaCd = 0;
-  hornFlash = 0;
+  hornT = 0;
+  hornBeat = 5;
+  hornDir = -1;
   bolts.length = 0;
   novas.length = 0;
 }
 
 function fireHorn(): void {
+  hornDir = -hornDir;
   const box = hornHitbox();
-  hornBox.x = box.x;
-  hornBox.y = box.y;
-  hornBox.w = box.w;
-  hornBox.h = box.h;
-  hornFaceX = player.faceX;
-  hornFaceY = player.faceY;
-  const spriteFrontX =
-    player.faceX > 0
-      ? player.x + PLAYER_WIDTH
-      : player.faceX < 0
-        ? player.x
-        : player.x + PLAYER_WIDTH / 2;
-  const spriteFrontY =
-    player.faceY > 0
-      ? player.y + PLAYER_HEIGHT
-      : player.faceY < 0
-        ? player.y
-        : player.y + PLAYER_HEIGHT / 2;
-  const boxBackX = player.faceX > 0 ? box.x : player.faceX < 0 ? box.x + box.w : box.x + box.w / 2;
-  const boxBackY = player.faceY > 0 ? box.y : player.faceY < 0 ? box.y + box.h : box.y + box.h / 2;
-  hornFrom.x = (boxBackX + spriteFrontX) / 2;
-  hornFrom.y = (boxBackY + spriteFrontY) / 2;
-  hornFlash = HORN_FLASH_MS;
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemyHitbox(enemies[i]);
-    if (overlaps(hornBox.x, hornBox.y, hornBox.w, hornBox.h, enemy.x, enemy.y, enemy.w, enemy.h)) {
+    if (overlaps(box.x, box.y, box.w, box.h, enemy.x, enemy.y, enemy.w, enemy.h)) {
       hurtEnemyAt(i, HORN_DAMAGE * hornPwr());
     }
   }
@@ -458,50 +419,22 @@ function updateBolts(dt: number): void {
 }
 
 export function drawCombat(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number): void {
-  if (hornFlash > 0) {
-    const fx = hornFaceX;
-    const fy = hornFaceY;
-    const len = Math.hypot(fx, fy) || 1;
-    const nx = fx / len;
-    const ny = fy / len;
-    const px = -ny;
-    const py = nx;
-    const tipX =
-      (fx > 0 ? hornBox.x + hornBox.w : fx < 0 ? hornBox.x : hornBox.x + hornBox.w / 2) - cameraX;
-    const tipY =
-      (fy > 0 ? hornBox.y + hornBox.h : fy < 0 ? hornBox.y : hornBox.y + hornBox.h / 2) - cameraY;
-    const fromX = hornFrom.x - cameraX;
-    const fromY = hornFrom.y - cameraY;
-    const chevronLen = 12;
-    const spread = 8;
-    const reach = Math.max(chevronLen, (tipX - fromX) * nx + (tipY - fromY) * ny);
-    const t = 1 - hornFlash / HORN_FLASH_MS;
-    const travel = chevronLen + t * (reach - chevronLen);
-    const curTipX = fromX + nx * travel;
-    const curTipY = fromY + ny * travel;
-    const curBackX = curTipX - nx * chevronLen;
-    const curBackY = curTipY - ny * chevronLen;
-    const w1x = curBackX + px * spread;
-    const w1y = curBackY + py * spread;
-    const w2x = curBackX - px * spread;
-    const w2y = curBackY - py * spread;
-
+  if (hornBeat < 2) {
+    const backX = player.x + (hornDir > 0 ? PLAYER_WIDTH : 0) - cameraX;
+    const cy = hornY() - cameraY;
+    const tipX = backX + hornDir * HORN_LEN;
+    ctx.beginPath();
+    ctx.moveTo(Math.floor(backX) + 0.5, Math.floor(cy - HORN_SPREAD) + 0.5);
+    ctx.lineTo(Math.floor(tipX) + 0.5, Math.floor(cy) + 0.5);
+    ctx.lineTo(Math.floor(backX) + 0.5, Math.floor(cy + HORN_SPREAD) + 0.5);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.miterLimit = 2;
+    ctx.stroke();
+    ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
-    ctx.lineJoin = 'miter';
-    strokeChevron(ctx, w1x, w1y, curTipX, curTipY, w2x, w2y, '#000');
-    strokeChevron(
-      ctx,
-      w1x + nx - px,
-      w1y + ny - py,
-      curTipX - nx,
-      curTipY - ny,
-      w2x + nx + px,
-      w2y + ny + py,
-      '#fff'
-    );
+    ctx.stroke();
   }
-
-  ctx.lineWidth = 1;
   for (const n of novas) {
     const c = novaCenter(n);
     const r = (1 - n.life / NOVA_LIFE) * NOVA_RADIUS;
@@ -552,28 +485,13 @@ export function drawCombat(ctx: CanvasRenderingContext2D, cameraX: number, camer
   }
 }
 
-function strokeChevron(
-  ctx: CanvasRenderingContext2D,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  color: string
-): void {
-  ctx.strokeStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(Math.floor(x0) + 0.5, Math.floor(y0) + 0.5);
-  ctx.lineTo(Math.floor(x1) + 0.5, Math.floor(y1) + 0.5);
-  ctx.lineTo(Math.floor(x2) + 0.5, Math.floor(y2) + 0.5);
-  ctx.stroke();
-}
-
-/** Debug: live horn AABB (follows facing) and nova radius. */
+/** Debug: live horn AABB during a lash; empty while resting. */
 export function combatDebug(): {
   horn: { x: number; y: number; w: number; h: number };
   radius: number;
 } {
-  return { horn: hornHitbox(), radius: NOVA_RADIUS };
+  return {
+    horn: hornBeat < 2 ? hornHitbox() : { x: 0, y: 0, w: 0, h: 0 },
+    radius: NOVA_RADIUS,
+  };
 }

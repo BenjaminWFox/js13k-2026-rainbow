@@ -35,12 +35,17 @@ These rules govern how code is written for this project.
    - This sums close to (or over) the 13 KB cap — expect to spend from the **fallback
      ladder**, cheapest pain first:
      1. Opening cutscene becomes static dialogue panels (no choreographed movement).
-     2. Cut surge spawns and the stretch difficulty modes.
-     3. Drop scrap-shop rows (never the whole shop).
+        **Partial:** walk-on / march / extra dialogue are gone; pipe-drop + simultaneous
+        drain waves remain.
+     2. Cut surge spawns and the stretch difficulty modes. **Never shipped (0 B).**
+     3. Drop scrap-shop rows (never the whole shop). **Done for this build:** Luck,
+        shop STR/DEX/CON/WIS, XP Gain, Scrap Gain. **Still in:** Start HP, Start Speed,
+        Magnet, Revive.
      4. Straighten the procedural pipes — **done for the competition build** (simple
         straight / diagonal layouts). The old snake walker is kept for the Director's Cut
         (rule 10), not deleted.
-     5. Shrink the audio reservation.
+     5. Shrink the audio reservation. **Done:** production ships no ZzFX/ZzFXM; synth
+        lives only in `_sample-game/`.
 7. **No external dependencies at runtime.** Everything is hand-rolled or vendored (ZzFX/ZzFXM
    already vendored in the sample).
 8. **TypeScript strictness stays on.** Types are free — they're erased at build time.
@@ -112,23 +117,22 @@ destroy the pipes.
 Plays on **every** Start press. **Skippable with any key** (skip jumps straight to the
 greyscale run-start state).
 
-1. Opens on the map: the **Prismatic Shard** hovers at world center, the unicorn just below.
-   The world is fully colored.
-2. The final boss opens a **portal on the right side of the plaza** and emerges.
-   Dialogue panel: *"Ahh we finally made it! These colors are going to make me RICH!!"*
-3. Next panel: *"Alright business men, get to work!"*
-4. The seven **minibosses emerge** from the portal and walk off-screen toward their
-   respective color slices. The boss exits back through the portal, which fades out.
-5. As they leave, the **pipes appear one after another** (colorless; world still colored).
-6. The pipes then **activate one after another**, each draining its color from the world.
-7. Shard panel: *"Oh no! Unicorn, it's up to you to find where those pipes go, and destroy
-   them!"*
-8. The run starts.
+1. Opens on the plaza: **Prismatic Shard** hovering, unicorn below, **Business Boss**
+   standing at a plaza portal. The world is fully colored. No pipes yet.
+2. Boss panel: *"ALRIGHT BOYS LAY THOSE PIPES! THESE COLORS WILL MAKE US RICH!"*
+3. The **seven pipes drop** in (staggered). The first pipe removes the boss and plaza
+   portal.
+4. **All seven reverse drain waves** start together (portal → cap). Inside each circle
+   that slice greys; when a wave hits its cap, that color unlocks off the rest of the
+   world (tiles, unicorn, shard).
+5. Shard panel: *"UNICORN! FIND WHERE THOSE PIPES GO AND DESTROY THEM!"*
+6. The run starts (greyscale, pipes in place). The shard **stays at the plaza** during
+   the run.
 
 ### Run loop
 
-1. **Start:** center spawn, greyscale world, horn + white nova owned, shop starting
-   stats/HP/speed applied.
+1. **Start:** center spawn, greyscale world, horn + white nova owned, shop Start HP /
+   Start Speed / Magnet / Revive applied.
 2. **Play:** move only. Enemies spawn around the player. Crystals and scrap magnet in.
 3. **Level-up:** pause, pick 1 card, resume.
 4. **Pipe:** walk to a miniboss, kill it → miniboss death sequence (see Enemies), ending
@@ -154,25 +158,28 @@ The pipe-unlock overlay still fires in either case (see the miniboss death seque
 
 ### Player
 
-- **Health:** baseline **100 HP**. CON (in-run and shop) increases max HP. Shop Start HP
+- **Health:** baseline **100 HP**. CON (in-run only) increases max HP. Shop Start HP
   adds extra max HP at run start (amounts TBD).
 - **No mana.** Abilities do not spend a resource; they auto-fire.
 - **Starting kit** (owned at run start, always auto-firing):
-  - **Horn** — melee damage in the facing direction. Facing = **last-move direction**
-    (diagonals included); initial facing before any movement is **right**. Own cooldown
-    (**650ms**, **10** base damage). Scales with **STR** only (**+20% per rank**).
+  - **Horn** — alternating left/right horn lash (not facing-aimed). Cycle is **1.5s**
+    in **250ms** beats: **right → left → rest ×4**. Visual is a static chevron (3px
+    black + 1px white) pinned to the sprite, vertically centered; **10** base damage.
+    Hits **only on the first frame** of each lash. Hitbox is taller than the V and
+    **50% longer** than the graphic at the tip. Scales with **STR** only (**+20% per
+    rank**, in-run cards).
   - **Nova (white)** — the kit stomp. A self-centered expanding ring: **area damage +
     knockback** as the leading edge passes enemies. See Auto-combat.
 - **Hitboxes:** 11×11 aligned to the **bottom** of the 11×19 player sprite (horn/head
-  sticks out above). Same box for every facing; sprite facing art is TBD.
+  sticks out above). Sprite facing art is TBD (movement/horn do not use facing).
 - Movement collision uses that hitbox only.
 - The player **can be frozen** (by blue/indigo on an enemy nova) and, like all frozen
   entities, takes **+25% damage** while frozen.
 
 ### Auto-combat
 
-- **Two fireables:** horn (own cooldown) and **one nova** (shared period). **No ability
-  keys.** The player never triggers attacks manually.
+- **Two fireables:** horn (own 1.5s lash cycle) and **one nova** (shared period). **No
+  ability keys.** The player never triggers attacks manually.
 - **Nova:** one expanding ring that **follows the caster** for **500ms** out to **66 px**.
   Default **period 2s**. Each owned color is a **bit** on that pulse. Visual: **1px
   concentric strokes**, white innermost (player kit only), then owned colors in
@@ -226,9 +233,8 @@ drops for a meaningful time (permanent-looking haste).
 
 ### Stats
 
-In-run level-up picks and shop starting ranks **stack**, but every stat caps at
-**5 total ranks** (shop ranks — max 3 — plus in-run picks combined). A capped stat leaves
-the draft pool.
+STR / DEX / CON / WIS are **in-run only** (level-up cards). They do **not** persist
+and have no shop rows. Each caps at **5 ranks**. A capped stat leaves the draft pool.
 
 | Stat | Effect |
 |------|--------|
@@ -243,8 +249,8 @@ the draft pool.
   not every kill necessarily drops one.
 - Crystals **magnet** toward the player (see Magnet below). Magnet range is upgradeable
   in the scrap shop.
-- Filling the XP bar **pauses** the game. Pick **1** card from a base of **3**, then resume.
-  Luck can add a 4th and 5th card (see Scrap shop) — extras are chanced, not guaranteed.
+- Filling the XP bar **pauses** the game. Pick **1** card from a hand of **3**, then resume.
+  (Luck / extra cards were cut.)
 - **Draft pool:** STR / DEX / CON / WIS only (until capped). Color bits come from pipes;
   horn/nova are kit. No power cards, no cooldown ranks.
 - Duplicate cards in a single hand: TBD.
@@ -275,18 +281,20 @@ the first thing to drop, not the whole system.
 #### Scrap shop
 
 Each row can be bought **3 ranks**. Prices TBD. Not in the shop: horn/nova kit, nova
-period.
+period, in-run stats, drop-rate rows.
+
+**In this build (4 rows):**
 
 | Row | 3 ranks |
 |-----|---------|
-| Luck | Extra draft cards are chanced. Start 0%. Ranks: **25/50/75%** for a 4th card; **20/40/60%** for a 5th, rolled **only if** the 4th was granted. |
-| STR, DEX, CON, WIS | Four separate starting-stat rows (count toward the 5-rank stat cap). STR/WIS **+20%/rank**, CON **+20 HP**, DEX **10%/rank**. |
-| Start HP | Extra max HP at run start (beyond CON). Amounts TBD. |
+| Start HP | Extra max HP at run start (beyond in-run CON). Amounts TBD. |
 | Start Speed | Extra move speed at run start (always-on; stacks with the yellow nova burst). Amounts TBD. |
 | Magnet | Attract radius **+25%** per rank. |
-| XP gain | Relative crystal drop-chance **+33/66/100%** vs each enemy's inherent chance. |
-| Scrap gain | Relative scrap drop-chance **+33/66/100%** vs each enemy's inherent chance. |
 | Revive | **1/2/3** extra lives per run. Revive **in place**. HP restored and i-frames TBD. |
+
+**Cut from the shop (SPEC fallback #3):** Luck (4th/5th draft cards), STR/DEX/CON/WIS
+starting-stat rows, XP Gain, Scrap Gain. Inherent crystal/scrap drop chances are
+unmodified. Old 11-row localStorage rank arrays are ignored (scrap is still loaded).
 
 ### Enemies
 
@@ -673,11 +681,11 @@ the rainbow colors.
 
 ## 5. Open Questions / TBD
 
-- Player facing **art** (behavior is decided: last-move facing, initial right). Walk
+- Player facing **art** (horn and movement do **not** use facing). Walk
   animation is **implemented** (§3 leg-cut bake, 150ms cadence, spec cut coordinates —
   they match the art exactly); only visual tuning of the cadence remains if desired.
 - XP curve (crystals per level) and inherent crystal/scrap drop chances per enemy type.
-- Combat numbers (placeholders in code, tune in play): horn cooldown/damage, nova
+- Combat numbers (placeholders in code, tune in play): horn lash timing/damage, nova
   period/duration/radius, white/orange/fireball damage, knockback, heal, freeze, yellow
   burst duration and amount, yellow-miniboss period.
 - Per-rank STR/CON/WIS amounts are in code (20% / +20 HP / 20% nova PWR); whether CON
@@ -686,7 +694,7 @@ the rainbow colors.
 - Revive: HP restored and i-frames (likely needed so the swarm doesn't instantly re-kill);
   whether the revive count appears on the HUD.
 - Regular enemy HP and movement speed per type.
-- Whether the Prismatic Shard remains visible at the plaza during runs (decoration only).
+- Whether the Prismatic Shard remains visible at the plaza during runs — **yes**, it stays.
 - Scrap shop prices; Start HP / Start Speed amounts per rank.
 - Settings / audio toggles on the title screen.
 - Exact per-enemy content hitbox rectangles (measure when wiring combat).
@@ -726,20 +734,13 @@ projectiles + freeze, minibosses + pipe destruction + color wave.
 Notes:
 
 - Phase 10 is next. Cutscene (`src/cutscene.ts`) plays on every Start:
-  colored world, plaza portal fade-in, boss walk-out, two boss panels,
-  seven minibosses marching off, pipes appearing colorless (a spare
-  grey-stripe pipe kit) then activating one-by-one with instant per-color
-  drains (no reverse wave — cheaper), closing shard panel. Any key/click
-  advances a panel; during choreography it skips to the greyscale run
-  start. Dialogue panel = framed speaker sprite + word-wrapped packed-font
-  lines.
-- **Size:** 13,628 B zipped — 316 B over the cap (phase 9 cost 985 B, inside
-  its §1 budget; the §3 leg-cut walk animation cost 168 B; audio still
-  unreserved). Phase 10 must golf and spend from the §1 fallback ladder.
-- Shop prices, Start HP / Start Speed amounts, revive HP/i-frames, and
-  other combat numbers remain placeholders until the tuning phase.
-  Debug: 1–7 toggle palette (nova bits follow unlocks) without killing
-  minibosses; F unlocks all colors and starts the finale; C grants scrap;
-  K sets HP to 0.
-- Audio (phase 10) stays deferred per §2; drop stretch items before shop rows per the
-  §1 fallback ladder.
+  colored plaza, static boss + portal, one boss line, staggered pipe drop
+  (first pipe removes boss/portal), simultaneous reverse drain waves, shard
+  line. Any key/click advances a panel; during choreography it skips to the
+  greyscale run start. Dialogue panel = framed speaker sprite + word-wrapped
+  packed-font lines. The shard stays at the plaza in title, cutscene, and run.
+- Shop is 4 rows (Start HP / Start Speed / Magnet / Revive). Luck, shop stats,
+  and XP/Scrap Gain are cut. Horn is a 1.5s left/right lash, not facing-aimed.
+- Audio stays deferred (not in the production zip) per §2. Remaining fallback
+  spend if still over: Start Speed row, simpler pipe death, remaining cutscene
+  motion / instant wave (last resort).

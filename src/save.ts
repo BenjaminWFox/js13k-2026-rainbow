@@ -13,11 +13,10 @@ export function loadSave(): void {
     const data = JSON.parse(raw) as { s?: number; r?: number[] };
     setScrap((data.s ?? 0) | 0);
     const ranks = data.r;
-    if (!Array.isArray(ranks)) {
-      return;
-    }
-    for (let i = 0; i < SHOP_ROWS; i++) {
-      shopRanks[i] = Math.max(0, Math.min(SHOP_RANK_CAP, (ranks[i] ?? 0) | 0));
+    if (Array.isArray(ranks) && ranks.length === SHOP_ROWS) {
+      for (let i = 0; i < SHOP_ROWS; i++) {
+        shopRanks[i] = Math.max(0, Math.min(SHOP_RANK_CAP, (ranks[i] ?? 0) | 0));
+      }
     }
   } catch {
     // Private-mode / corrupt JSON — start fresh.

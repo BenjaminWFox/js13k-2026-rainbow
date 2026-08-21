@@ -26,9 +26,6 @@ export const player = {
   // Top-left corner of the player sprite, world-space pixels
   x: PLAYER_SPAWN_X,
   y: PLAYER_SPAWN_Y,
-  // Last-move facing, diagonals included. Initial facing is right.
-  faceX: 1,
-  faceY: 0,
   moving: false,
   /** Walk-cycle clock (ms); advances only while moving, resets when idle. */
   walkTime: 0,
@@ -85,18 +82,9 @@ export function tryRevive(): boolean {
   return true;
 }
 
-const DIAGONAL_RELEASE_MS = 100;
-
-let lastDiagX = 1;
-let lastDiagY = 0;
-/** -1 = no pending diagonal; 0 = currently diagonal; >0 = ms since leaving a diagonal. */
-let diagGrace = -1;
-
 export function resetPlayer(): void {
   player.x = PLAYER_SPAWN_X;
   player.y = PLAYER_SPAWN_Y;
-  player.faceX = 1;
-  player.faceY = 0;
   player.moving = false;
   player.walkTime = 0;
   player.maxHp =
@@ -106,9 +94,6 @@ export function resetPlayer(): void {
   player.boost = 0;
   player.lives = shopRanks[SHOP_REVIVE];
   player.iframes = 0;
-  lastDiagX = 1;
-  lastDiagY = 0;
-  diagGrace = -1;
 }
 
 export function updatePlayer(dt: number): void {
@@ -142,30 +127,7 @@ export function updatePlayer(dt: number): void {
   player.moving = dx !== 0 || dy !== 0;
   player.walkTime = player.moving ? player.walkTime + dt : 0;
   if (!player.moving) {
-    if (diagGrace >= 0 && diagGrace <= DIAGONAL_RELEASE_MS) {
-      player.faceX = lastDiagX;
-      player.faceY = lastDiagY;
-    }
-    diagGrace = -1;
     return;
-  }
-
-  if (dx !== 0 && dy !== 0) {
-    lastDiagX = dx;
-    lastDiagY = dy;
-    diagGrace = 0;
-    player.faceX = dx;
-    player.faceY = dy;
-  } else if (diagGrace >= 0 && diagGrace <= DIAGONAL_RELEASE_MS) {
-    diagGrace += dt;
-    if (diagGrace > DIAGONAL_RELEASE_MS) {
-      diagGrace = -1;
-      player.faceX = dx;
-      player.faceY = dy;
-    }
-  } else {
-    player.faceX = dx;
-    player.faceY = dy;
   }
 
   const speed = PLAYER_SPEED * speedMul(player.boost) * (dx !== 0 && dy !== 0 ? Math.SQRT1_2 : 1);

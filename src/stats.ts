@@ -6,18 +6,11 @@ export const STAT_WIS = 3;
 export const STAT_CAP = 5;
 export const SHOP_RANK_CAP = 3;
 
-export const SHOP_LUCK = 0;
-export const SHOP_STR = 1;
-export const SHOP_DEX = 2;
-export const SHOP_CON = 3;
-export const SHOP_WIS = 4;
-export const SHOP_START_HP = 5;
-export const SHOP_START_SPD = 6;
-export const SHOP_MAGNET = 7;
-export const SHOP_XP = 8;
-export const SHOP_SCRAP = 9;
-export const SHOP_REVIVE = 10;
-export const SHOP_ROWS = 11;
+export const SHOP_START_HP = 0;
+export const SHOP_START_SPD = 1;
+export const SHOP_MAGNET = 2;
+export const SHOP_REVIVE = 3;
+export const SHOP_ROWS = 4;
 
 // Per-rank amounts are TBD; placeholders until the tuning phase.
 export const STR_PER_RANK = 0.2;
@@ -42,29 +35,14 @@ export const POWER_UNLOCK_BODY = [
   'EATS SHOTS',
 ];
 
-const LUCK_FOURTH = [0, 0.25, 0.5, 0.75];
-const LUCK_FIFTH = [0, 0.2, 0.4, 0.6];
-
-/** In-run ranks. Shop ranks stack on top (max 3) toward the 5-rank stat cap. */
+/** In-run ranks. Cap is 5. */
 export const inRunStats = [0, 0, 0, 0];
-/** Luck, STR, DEX, CON, WIS, Start HP, Start Speed, Magnet, XP, Scrap, Revive. */
-export const shopRanks = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+/** Start HP, Start Speed, Magnet, Revive. */
+export const shopRanks = [0, 0, 0, 0];
 
-const SHOP_NAME = [
-  'LUCK',
-  'STR',
-  'DEX',
-  'CON',
-  'WIS',
-  'START HP',
-  'START SPD',
-  'MAGNET',
-  'XP GAIN',
-  'SCRAP GAIN',
-  'REVIVE',
-];
+const SHOP_NAME = ['START HP', 'START SPD', 'MAGNET', 'REVIVE'];
 /** Base cost; actual price is this times next rank. Placeholders until tuning. */
-const SHOP_COST = [12, 10, 10, 10, 10, 12, 12, 10, 15, 15, 25];
+const SHOP_COST = [12, 12, 10, 25];
 
 export interface DraftCard {
   id: number;
@@ -73,7 +51,7 @@ export interface DraftCard {
 }
 
 export function totalStat(id: number): number {
-  return Math.min(STAT_CAP, inRunStats[id] + shopRanks[SHOP_STR + id]);
+  return Math.min(STAT_CAP, inRunStats[id]);
 }
 
 export function shopPrice(row: number): number {
@@ -116,7 +94,7 @@ export function resetRunStats(): void {
   inRunStats.fill(0);
 }
 
-/** Deal 3 cards (luck may add a 4th/5th) from uncapped stats. */
+/** Deal 3 cards from uncapped stats. */
 export function dealLevelUpCards(): DraftCard[] {
   const pool: DraftCard[] = [];
   for (let i = 0; i < 4; i++) {
@@ -129,17 +107,8 @@ export function dealLevelUpCards(): DraftCard[] {
     }
   }
 
-  let count = 3;
-  const luck = Math.min(SHOP_RANK_CAP, shopRanks[SHOP_LUCK]);
-  if (Math.random() < LUCK_FOURTH[luck]) {
-    count++;
-    if (Math.random() < LUCK_FIFTH[luck]) {
-      count++;
-    }
-  }
-
   const hand: DraftCard[] = [];
-  const n = Math.min(count, pool.length);
+  const n = Math.min(3, pool.length);
   for (let i = 0; i < n; i++) {
     const idx = (Math.random() * pool.length) | 0;
     hand.push(pool.splice(idx, 1)[0]);

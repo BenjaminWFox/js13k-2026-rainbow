@@ -1,7 +1,7 @@
 import { PLAYER_SPEED, PLAYER_WIDTH } from './constants';
 import { getPlayerHitbox } from './player';
 import { createSprite } from './sprites';
-import { SHOP_MAGNET, SHOP_SCRAP, SHOP_XP, shopRanks } from './stats';
+import { SHOP_MAGNET, shopRanks } from './stats';
 
 export const PICKUP_CRYSTAL = 0;
 export const PICKUP_SCRAP = 1;
@@ -104,7 +104,7 @@ export function dropBossLoot(x: number, y: number): void {
 
 /** Independent crystal/scrap rolls at a world point (usually an enemy center). */
 export function dropLoot(x: number, y: number): void {
-  if (Math.random() < CRYSTAL_CHANCE * (1 + shopRanks[SHOP_XP] / 3)) {
+  if (Math.random() < CRYSTAL_CHANCE) {
     pickups.push({
       x: x - CRYSTAL_W / 2 + (Math.random() - 0.5) * 4,
       y: y - CRYSTAL_H / 2 + (Math.random() - 0.5) * 4,
@@ -112,7 +112,7 @@ export function dropLoot(x: number, y: number): void {
       delay: MAGNET_DELAY_MS,
     });
   }
-  if (Math.random() < SCRAP_CHANCE * (1 + shopRanks[SHOP_SCRAP] / 3)) {
+  if (Math.random() < SCRAP_CHANCE) {
     pickups.push({
       x: x - SCRAP_W / 2 + (Math.random() - 0.5) * 4,
       y: y - SCRAP_H / 2 + (Math.random() - 0.5) * 4,
