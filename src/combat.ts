@@ -6,21 +6,25 @@ import {
   type Enemy,
   enemies,
   enemyHitbox,
-  FINAL_BOSS,
   hurtEnemyAt,
 } from './enemies';
+import { spawnDamageNumber } from './fx';
 import { getTile, TILE_WALL } from './map';
 import { RAINBOW_COLORS, unlockedColors } from './palette';
+import { damagePortal, portalHitbox } from './pipes';
 import { damagePlayer, freezePlayer, getPlayerHitbox, player } from './player';
+import { createSprite } from './sprites';
 import { pwr, STAT_STR, STAT_WIS } from './stats';
 
 const HORN_MS = 250;
 const HORN_BEATS = 6;
 const HORN_DAMAGE = 10;
-/** Tip reach from the sprite's left/right edge. */
+/** Tip reach from the sprite's left/right edge (hitbox, not the 17×9 art). */
 const HORN_LEN = 35;
-/** Visual half-height of the chevron. */
+/** Visual half-height of the old chevron; still drives hitbox height. */
 const HORN_SPREAD = 8;
+const HORN_SW = 17;
+const HORN_SH = 9;
 
 const STOMP_DAMAGE = 5;
 const NOVA_RADIUS = 66;
@@ -33,7 +37,6 @@ const BOLT_SIZE = 4;
 const FLAME_NOVA_DAMAGE = 6;
 const NOVA_PERIOD = 2000;
 const NOVA_LIFE = 500;
-const YELLOW_PERIOD = 500;
 const SPEED_BURST_MS = 1000;
 const FREEZE_MS = 500;
 /** 2× the 7px enemy sprite cell — "small impact radius". */
@@ -80,11 +83,15 @@ interface Nova {
   life: number;
   lastR: number;
   seen: Enemy[];
+  seenP: number;
   hitP: boolean;
 }
 
 const bolts: Bolt[] = [];
 const novas: Nova[] = [];
+
+let hornRight: HTMLCanvasElement | undefined;
+let hornLeft: HTMLCanvasElement | undefined;
 
 let viewX = 0;
 let viewY = 0;
@@ -212,8 +219,8 @@ export function updateCombat(
     if (enemy.cd > 0) {
       continue;
     }
-    fireNova(enemy, enemy.color === FINAL_BOSS ? N_FINALE : 2 << enemy.color);
-    enemy.cd += enemy.color === 2 ? YELLOW_PERIOD : NOVA_PERIOD;
+    fireNova(enemy, N_FINALE);
+    enemy.cd += NOVA_PERIOD;
   }
 
   updateNovas(dt);
@@ -229,6 +236,15 @@ export function resetCombat(): void {
   novas.length = 0;
 }
 
+function hitPortal(i: number, amount: number): void {
+  const box = portalHitbox(i);
+  if (!box) {
+    return;
+  }
+  spawnDamageNumber(box.x + box.w / 2, box.y - 6, amount);
+  damagePortal(i, amount);
+}
+
 function fireHorn(): void {
   hornDir = -hornDir;
   const box = hornHitbox();
@@ -236,6 +252,15 @@ function fireHorn(): void {
     const enemy = enemyHitbox(enemies[i]);
     if (overlaps(box.x, box.y, box.w, box.h, enemy.x, enemy.y, enemy.w, enemy.h)) {
       hurtEnemyAt(i, HORN_DAMAGE * pwr(STAT_STR));
+    }
+  }
+  for (let i = 0; i < 7; i++) {
+    const portal = portalHitbox(i);
+    if (
+      portal &&
+      overlaps(box.x, box.y, box.w, box.h, portal.x, portal.y, portal.w, portal.h)
+    ) {
+      hitPortal(i, HORN_DAMAGE * pwr(STAT_STR));
     }
   }
 }
@@ -261,7 +286,7 @@ function fireNova(owner: Enemy | null, bits: number): void {
       }
     }
   }
-  novas.push({ owner, bits, pwr: amount, life: NOVA_LIFE, lastR: -1, seen: [], hitP: false });
+  novas.push({ owner, bits, pwr: amount, life: NOVA_LIFE, lastR: -1, seen: [], seenP: 0, hitP: false });
 }
 
 function spawnBolt(
@@ -338,6 +363,23 @@ function updateNovas(dt: number): void {
           applyKnockback(enemy, c.x, c.y, STOMP_KNOCKBACK);
         }
       }
+      if (dmg) {
+        for (let p = 0; p < 7; p++) {
+          if (n.seenP & (1 << p)) {
+            continue;
+          }
+          const box = portalHitbox(p);
+          if (!box) {
+            continue;
+          }
+          const dist = Math.hypot(box.x + box.w / 2 - c.x, box.y + box.h / 2 - c.y);
+          if (n.lastR >= dist || dist > r) {
+            continue;
+          }
+          n.seenP |= 1 << p;
+          hitPortal(p, dmg);
+        }
+      }
     } else if (!n.hitP) {
       const hit = getPlayerHitbox();
       const dist = Math.hypot(hit.x + hit.w / 2 - c.x, hit.y + hit.h / 2 - c.y);
@@ -384,11 +426,32 @@ function updateBolts(dt: number): void {
           break;
         }
       }
-      if (hit < 0) {
+      if (hit >= 0) {
+        if (p.damage > 0) {
+          hurtEnemyAt(hit, p.damage);
+        }
+        if (p.freezeMs > 0) {
+          crowdControlAt(p.x, p.y, FROSTBALL_RADIUS, p.freezeMs);
+        }
+        bolts.splice(i, 1);
+        continue;
+      }
+      let hitPortalI = -1;
+      for (let n = 0; n < 7; n++) {
+        const box = portalHitbox(n);
+        if (
+          box &&
+          overlaps(p.x - hw, p.y - hw, BOLT_SIZE, BOLT_SIZE, box.x, box.y, box.w, box.h)
+        ) {
+          hitPortalI = n;
+          break;
+        }
+      }
+      if (hitPortalI < 0) {
         continue;
       }
       if (p.damage > 0) {
-        hurtEnemyAt(hit, p.damage);
+        hitPortal(hitPortalI, p.damage);
       }
       if (p.freezeMs > 0) {
         crowdControlAt(p.x, p.y, FROSTBALL_RADIUS, p.freezeMs);
@@ -413,20 +476,15 @@ function updateBolts(dt: number): void {
 
 export function drawCombat(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number): void {
   if (hornBeat < 2) {
-    const backX = player.x + (hornDir > 0 ? PLAYER_WIDTH : 0) - cameraX;
-    const cy = hornY() - cameraY;
-    const tipX = backX + hornDir * HORN_LEN;
-    ctx.beginPath();
-    ctx.moveTo(Math.floor(backX) + 0.5, Math.floor(cy - HORN_SPREAD) + 0.5);
-    ctx.lineTo(Math.floor(tipX) + 0.5, Math.floor(cy) + 0.5);
-    ctx.lineTo(Math.floor(backX) + 0.5, Math.floor(cy + HORN_SPREAD) + 0.5);
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 3;
-    ctx.miterLimit = 2;
-    ctx.stroke();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    if (!hornRight) {
+      hornRight = createSprite(88, 0, HORN_SW, HORN_SH);
+      hornLeft = createSprite(88, 0, HORN_SW, HORN_SH, true);
+    }
+    ctx.drawImage(
+      (hornDir > 0 ? hornRight : hornLeft) as HTMLCanvasElement,
+      Math.floor(player.x + (hornDir > 0 ? PLAYER_WIDTH : -HORN_SW) - cameraX),
+      Math.floor(hornY() - HORN_SH / 2 - cameraY)
+    );
   }
   for (const n of novas) {
     const c = novaCenter(n);

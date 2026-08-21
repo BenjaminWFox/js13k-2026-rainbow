@@ -2,11 +2,9 @@ import { resetCombat } from './combat';
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
 import { startCutscene } from './cutscene';
 import {
-  killOnScreenRegulars,
   resetEnemies,
   spawnFinalBoss,
   takeSlainFinalBoss,
-  takeSlainMiniboss,
   unlockNextTier,
 } from './enemies';
 import { resetExplosions, spawnExplosion } from './fx';
@@ -15,7 +13,7 @@ import { mouse, wasPressed } from './input';
 import { bakeTiles, snapshotTiles } from './map';
 import { RAINBOW_COLORS, unlockedColors } from './palette';
 import { consumeLevelUp, resetPickups, scrap, spendScrap } from './pickups';
-import { generatePipes, hidePipePortal, pipeRuns, spawnPlazaPortal, takePipeSegment } from './pipes';
+import { destroyPipe, generatePipes, spawnPlazaPortal, takeSlainPortal } from './pipes';
 import { player, resetPlayer, tryRevive } from './player';
 import { loadSave, saveGame } from './save';
 import { rebakeAllSprites } from './sprites';
@@ -43,19 +41,12 @@ export const SCENE_CUTSCENE = 2;
 
 export let scene = SCENE_TITLE;
 
-const PHASE_PIPE = 0;
-const PHASE_WAVE = 1;
-const PIPE_GAP_MS = 45;
 export const WAVE_SPEED = 0.38;
 
 let pauseOpen = false;
 let hand: DraftCard[] = [];
 let seq: {
-  phase: number;
   color: number;
-  x: number;
-  y: number;
-  wait: number;
 } | null = null;
 let finaleStarted = false;
 
@@ -202,10 +193,6 @@ function beginWave(color: number, x: number, y: number): void {
   bakeTiles();
   rebakeAllSprites();
   startWave(x, y);
-  hidePipePortal(color);
-  if (seq) {
-    seq.phase = PHASE_WAVE;
-  }
 }
 
 function startWave(x: number, y: number): void {
@@ -304,50 +291,23 @@ export function resetRun(): void {
   bakeTiles();
 }
 
-/** Consume a slain miniboss and start the choreographed death sequence. */
-export function startPendingDeathSequence(
-  camX: number,
-  camY: number,
-  viewW: number,
-  viewH: number
-): void {
-  const death = takeSlainMiniboss();
+/** Consume a slain edge portal and start the color-restore sequence. */
+export function startPendingDeathSequence(): void {
+  const death = takeSlainPortal();
   if (!death) {
     return;
   }
   unlockNextTier();
-  killOnScreenRegulars(camX, camY, viewW, viewH);
-  const start = pipeRuns[death.color][0];
-  seq = {
-    phase: PHASE_PIPE,
-    color: death.color,
-    x: start.x + start.canvas.width / 2,
-    y: start.y + start.canvas.height / 2,
-    wait: 0,
-  };
+  spawnExplosion(death.x, death.y, RAINBOW_COLORS[death.color], 22);
+  destroyPipe(death.color);
+  seq = { color: death.color };
+  beginWave(death.color, death.x, death.y);
 }
 
 export function updateSequence(dt: number): void {
   if (!seq) {
     return;
   }
-  if (seq.phase === PHASE_PIPE) {
-    seq.wait += dt;
-    while (seq.wait >= PIPE_GAP_MS) {
-      seq.wait -= PIPE_GAP_MS;
-      const piece = takePipeSegment(seq.color);
-      if (!piece) {
-        beginWave(seq.color, seq.x, seq.y);
-        return;
-      }
-      const cx = piece.x + piece.canvas.width / 2;
-      const cy = piece.y + piece.canvas.height / 2;
-      spawnExplosion(cx, cy, RAINBOW_COLORS[seq.color], 10);
-      spawnExplosion(cx, cy, 0xb1b1b1, 8);
-    }
-    return;
-  }
-
   if (tickColorWave(dt)) {
     const color = seq.color;
     seq = null;

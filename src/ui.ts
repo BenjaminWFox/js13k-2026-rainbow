@@ -143,9 +143,9 @@ function layoutUi(viewWidth: number, viewHeight: number): void {
     if (heading) {
       headingX = (viewWidth - heading.width) >> 1;
       if (headingTop) {
-        // Unicorn is camera-centered; shard sits 25px above its sprite top.
+        // Unicorn is camera-centered.
         const playerY = (viewHeight - PLAYER_HEIGHT) >> 1;
-        headingY = playerY - 25 - 8 - heading.height;
+        headingY = playerY - 8 - heading.height;
         y = playerY + PLAYER_HEIGHT + 8;
       } else {
         const total = heading.height + 8 + subH + blockH;

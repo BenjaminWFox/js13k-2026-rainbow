@@ -75,8 +75,7 @@ You are a **unicorn** living in a bright world painted with all seven colors of 
 An evil corporation, led by the **Business Boss**, opens a **portal in the central plaza**
 and dispatches seven **Business Men**, who build seven **pipes** (each fed by its own small
 portal at the world's edge) and siphon the color away. When a run begins, the world is
-entirely **greyscale**. The **Prismatic Shard**, hovering at the world center, sends you to
-destroy the pipes.
+entirely **greyscale**. You set out to destroy those pipes.
 
 ### Structure
 
@@ -88,17 +87,17 @@ destroy the pipes.
 - **A run:** the player spawns at the **world center** with the starting kit. Colors,
   powers, XP, and in-run stats **reset** each run. Death ends the run after revives are
   spent. Scrap and shop ranks persist between runs (see Scrap).
-- **Objective:** find all 7 pipes. Each pipe is guarded by a **miniboss**. Defeating a
-  miniboss destroys its pipe, **releases one color**, and **adds that color's bit to the
+- **Objective:** find all 7 **edge portals**. Each portal has **100 HP**. Destroying a
+  portal destroys its pipe, **releases one color**, and **adds that color's bit to the
   nova** immediately (the next pulse uses it).
-- **Order:** pipes can be tackled in **any order**. Every miniboss must be beatable with
+- **Order:** portals can be tackled in **any order**. Every portal must be beatable with
   the starting kit (horn + white nova) alone.
 - **Finale:** once all 7 colors are released, the **final boss** re-opens the plaza portal
   and comes through, triggering the end fight.
-- **Win:** destroy all 7 pipes, then beat the final boss. No survival timer — revisit
+- **Win:** destroy all 7 portals, then beat the final boss. No survival timer — revisit
   if runs feel too long or too short.
-- **Pipe areas:** fully open — minibosses live at their pipes and can be fought or fled.
-  The around-player swarm continues during the fight (no sealed arena).
+- **Pipe areas:** fully open — walk up to a portal and attack it. The around-player swarm
+  continues (no sealed arena). Portals do not chase or deal contact damage.
 
 ### Title screen and flow
 
@@ -117,17 +116,16 @@ destroy the pipes.
 Plays on **every** Start press. **Skippable with any key** (skip jumps straight to the
 greyscale run-start state).
 
-1. Opens on the plaza: **Prismatic Shard** hovering, unicorn below, **Business Boss**
-   standing at a plaza portal. The world is fully colored. No pipes yet.
+1. Opens on the plaza: unicorn below, **Business Boss** standing at a plaza portal.
+   The world is fully colored. No pipes yet.
 2. Boss panel: *"ALRIGHT BOYS LAY THOSE PIPES! THESE COLORS WILL MAKE US RICH!"*
 3. The **seven pipes drop** in (staggered). The first pipe removes the boss and plaza
    portal.
 4. **All seven reverse drain waves** start together (portal → cap). Inside each circle
    that slice greys; when a wave hits its cap, that color unlocks off the rest of the
-   world (tiles, unicorn, shard).
-5. Shard panel: *"UNICORN! FIND WHERE THOSE PIPES GO AND DESTROY THEM!"*
-6. The run starts (greyscale, pipes in place). The shard **stays at the plaza** during
-   the run.
+   world (tiles, unicorn).
+5. Unicorn panel: *"I MUST DESTROY THOSE PIPES!"*
+6. The run starts (greyscale, pipes in place).
 
 ### Run loop
 
@@ -135,12 +133,12 @@ greyscale run-start state).
    Start Speed / Magnet / Revive applied.
 2. **Play:** move only. Enemies spawn around the player. Crystals and scrap magnet in.
 3. **Level-up:** pause, pick 1 card, resume.
-4. **Pipe:** walk to a miniboss, kill it → miniboss death sequence (see Enemies), ending
-   in the pipe-unlock overlay. Then that color's nova bit is on.
+4. **Pipe:** walk to an edge portal, destroy it → portal death sequence (see Enemies),
+   ending in the pipe-unlock overlay. Then that color's nova bit is on.
 5. **Death:** if a revive remains, revive **in place** and continue. Otherwise the run ends.
 6. **Win or death overlay**, then the **scrap shop**, then the next run.
 
-**Overlay queue:** if the XP bar fills during a miniboss death sequence, the level-up card
+**Overlay queue:** if the XP bar fills during a portal death sequence, the level-up card
 shows **after** the pipe-unlock overlay, before resuming. Overlays never overlap.
 
 **Pause semantics:** any pause (level-up, pipe overlay, pause menu) freezes **everything** —
@@ -148,13 +146,13 @@ spawns, cooldowns, projectiles, the color wave, and magnet motion.
 
 ### Color release
 
-When a miniboss is defeated, its color returns to the world as a **wave radiating outward
-from the pipe**, recoloring the world as it passes.
+When a portal is destroyed, its color returns to the world as a **wave radiating outward
+from the portal**, recoloring the world as it passes.
 
 > Fallback (if the wave costs too many bytes): the color returns instantly everywhere with a
 > brief celebratory flash.
 
-The pipe-unlock overlay still fires in either case (see the miniboss death sequence).
+The pipe-unlock overlay still fires in either case (see the portal death sequence).
 
 ### Player
 
@@ -163,11 +161,11 @@ The pipe-unlock overlay still fires in either case (see the miniboss death seque
 - **No mana.** Abilities do not spend a resource; they auto-fire.
 - **Starting kit** (owned at run start, always auto-firing):
   - **Horn** — alternating left/right horn lash (not facing-aimed). Cycle is **1.5s**
-    in **250ms** beats: **right → left → rest ×4**. Visual is a static chevron (3px
-    black + 1px white) pinned to the sprite, vertically centered; **10** base damage.
-    Hits **only on the first frame** of each lash. Hitbox is taller than the V and
-    **50% longer** than the graphic at the tip. Scales with **STR** only (**+20% per
-    rank**, in-run cards).
+    in **250ms** beats: **right → left → rest ×4**. Visual is the **17×9 unicorn horn**
+    sheet sprite, mid-body, `flipH` for left; **10** base damage. Hits **only on the
+    first frame** of each lash. Hitbox is the old chevron box (taller / 50% longer
+    than a 17px graphic). Scales with **STR** only (**+20% per rank**, in-run cards).
+    Horn art uses yellow and **greys with the palette** until yellow is unlocked.
   - **Nova (white)** — the kit stomp. A self-centered expanding ring: **area damage +
     knockback** as the leading edge passes enemies. See Auto-combat.
 - **Hitboxes:** 11×11 aligned to the **bottom** of the 11×19 player sprite (horn/head
@@ -207,12 +205,12 @@ The pipe-unlock overlay still fires in either case (see the miniboss death seque
   They impact the **first enemy hit**, even if it wasn't the original target. They pass
   **over pipes**, are **blocked by walls**, and **despawn off-screen** on a miss.
   Frostball freeze radius on impact: **2× sprite size** (14 px).
-- Frozen entities (enemies *and* player) take **+25% damage**. Minibosses and the final
-  boss **cannot be frozen** — they are **slowed** instead, for **2× the freeze duration**.
+- Frozen entities (enemies *and* player) take **+25% damage**. The final
+  boss **cannot be frozen** — it is **slowed** instead, for **2× the freeze duration**.
 
 ### Powers (one bit per released color)
 
-Destroying a pipe **turns that color's nova bit on immediately** (it does not go through
+Destroying a portal **turns that color's nova bit on immediately** (it does not go through
 the level-up draft). All nova numbers on the **player** pulse scale with **WIS** (nova
 PWR). Horn is the only STR-scaled attack. Powers are not drafted or ranked.
 
@@ -228,8 +226,6 @@ PWR). Horn is the only STR-scaled attack. Powers are not drafted or ranked.
 
 **Yellow speed:** not a permanent stat. Unlocking yellow makes the nova apply a **burst**
 each pulse. Shop Start Speed is always-on and stacks with the burst while it is active.
-The yellow **miniboss** uses a shorter nova period (**0.5s**) so its burst (**1s**) never
-drops for a meaningful time (permanent-looking haste).
 
 ### Stats
 
@@ -269,8 +265,8 @@ Meta currency for between-run upgrades. Cut only if bytes force it; shop **rows*
 the first thing to drop, not the whole system.
 
 - Drops in-run like crystals and is **magneted** the same way. Regular enemies drop a
-  small amount; minibosses and the final boss drop a chunk. Amounts and inherent chances
-  TBD.
+  small amount; the final boss drops a chunk. Portals drop nothing. Amounts and inherent
+  chances TBD.
 - Scrap magneted during the run is **kept on death, win, or quit-to-menu**. Uncollected
   scrap on the ground is lost.
 - Spent in a **between-run shop** (after the death or victory overlay), also reachable
@@ -333,44 +329,37 @@ Easiest to hardest — contact damage is **1 for the paperclip, +1 per step**:
 | 7 | Calculator | 7 |
 | 8 | Scissors | 8 |
 
-A run starts with **paperclips only**; **each destroyed pipe unlocks the next type**
-(7 pipes → all 8 types in play before the finale). HP and movement per type: TBD.
+A run starts with **paperclips only**; **each destroyed portal unlocks the next type**
+(7 portals → all 8 types in play before the finale). HP and movement per type: TBD.
 
 - **Stretch difficulty modes:** Easy = only the type ladder, no rate scaling; Normal =
   default; Hard = spawn pressure also ramps with time in the run.
 
-#### Minibosses (7)
+#### Edge portals (7)
 
-One per pipe. All share the **Business Man** sprite (intentional corporate facelessness).
-The only color on each is the **eyes**, tinted to the rainbow color that miniboss
-guards/steals.
+One per pipe, at the world's edge. The **plaza portal** (cutscene / finale) is **not**
+a target.
 
-- **HP: 100** (same as the player's baseline).
-- **Attacks:** touch-based like regular enemies, **plus the same nova** with **only that
-  color's bit** (e.g. the red miniboss's pulse launches a fireball; blue/indigo can freeze
-  the player; violet eats player bolts). Fires while chasing, on the default **2s**
-  period — except **yellow at 0.5s** so the speed burst stays up.
-- **Engagement:** chases the player from within **75 px**; stops pursuing beyond
-  **250 px**; **HP resets** if the player moves beyond **500 px**.
-- **Speed: 0.04** px/ms (vs player 0.05) — **0.06** while the yellow burst is active.
-- Takes **50% of normal knockback** from the player's white nova. Cannot be frozen (slowed
-  2× freeze duration instead).
+- **HP: 100.** HP bar under the 12×23 portal (same style as the player bar).
+- **Damage:** any player attack that overlaps the portal AABB (horn, nova wavefront,
+  fireballs). No contact damage, no nova of their own, no loot on death.
+- The plaza portal used by the finale is not attackable.
 
-#### Miniboss death sequence
+#### Portal death sequence
 
-1. Semi-pause: the **player is frozen**.
-2. All on-screen regular enemies **die** — they **drop crystals/scrap normally**, and the
-   magnet collects during the sequence.
-3. The **pipe is destroyed** segment by segment (pixel-explosion effect per segment).
-4. The **recolor wave** runs.
-5. The **pipe-unlock overlay** shows: color unlocked, power name, what it does (same card
+1. Semi-pause: the **player is frozen** (swarm also pauses; pickups still magnet).
+   On-screen regulars are **not** killed.
+2. The **entire pipe vanishes at once**, the portal is removed, and a **pixel explosion**
+   in that slice's color plays where the portal was.
+3. The **recolor wave** runs, originating at the portal.
+4. The **pipe-unlock overlay** shows: color unlocked, power name, what it does (same card
    family as level-up).
-6. If the XP bar filled, the **level-up card** shows next. Then play resumes with that
+5. If the XP bar filled, the **level-up card** shows next. Then play resumes with that
    color's nova bit on.
 
 #### Final boss
 
-**Business Boss** sprite — visually almost identical to Business Man on purpose.
+**Business Boss** sprite.
 
 - Re-opens the **plaza portal** (right side of the central white plaza) and emerges once
   all 7 colors are released.
@@ -380,6 +369,7 @@ guards/steals.
   (the player's base). Revisit and drop heal/ward bits if the fight drags.
 - **Unleashed:** pursues the player across the whole map; **HP never resets**.
 - Cannot be frozen (slowed 2× freeze duration instead).
+- Takes **50% of normal knockback** from the player's white nova.
 
 ### HUD
 
@@ -403,7 +393,7 @@ guards/steals.
 - **Dialogue panels** (cutscene): Zelda-like — speaker sprite framed on the left, text to
   the right. Advance with any key/click.
 - **Pixel explosion:** one reusable, **tintable** burst-of-pixels effect, instantiated
-  for enemy deaths, the player taking a hit, and pipe-segment destruction.
+  for enemy deaths, the player taking a hit, and portal destruction.
 - **Text** uses the bit-packed code font (see §3 Text rendering). No DOM UI — everything
   is canvas.
 
@@ -492,7 +482,7 @@ No font lives on the sprite sheet. Text uses a **bit-packed 3×5 pixel font**:
 
 ### Animation
 
-- **Characters (Unicorn, Business Man, Business Boss):** a 2-frame walk cycle **derived at
+- **Characters (Unicorn, Business Boss):** a 2-frame walk cycle **derived at
   bake time** from the single 11×19 sheet frame — no extra sheet art. The "leg-cut" trick:
   - The sprite's vertical midline is column 5. For each walk frame, take the bottom 2 rows
     (rows 17–18) on one side of the midline — a **4-wide × 2-tall block** (columns 1–4 for
@@ -536,10 +526,10 @@ No font lives on the sprite sheet. Text uses a **bit-packed 3×5 pixel font**:
   enemies.
 - **Pipes (competition layout):** 7 portals on a 10×10 edge map (cells `(0,0)` red NW,
   `(5,0)` orange N, `(9,0)` yellow NE, `(0,5)` green W, `(9,5)` blue E, `(0,9)` indigo SW,
-  `(5,9)` violet S), inset 75px. Default portal faces east (horizontal through the seam);
-  west-side portals are flipH. Two run modes only:
+  `(5,9)` violet S), inset 75px. Portals are unflipped; west-side pipes still
+  emerge west from the seam. Two run modes only:
   - **Straight** — one heading from portal to hub. Green: left → right. Blue: right → left.
-    Orange: top → bottom with **one curve** out of the portal (portals face E/W). Violet:
+    Orange: top → bottom with **one curve** out of the portal (pipe leaves E/W). Violet:
     bottom → top with the same portal curve.
   - **Diagonal** — alternating straight / curve. Red: top-left → bottom-right. Yellow:
     top-right → bottom-left. Indigo: bottom-left → top-right.
@@ -572,7 +562,7 @@ No font lives on the sprite sheet. Text uses a **bit-packed 3×5 pixel font**:
 
 ## 4. Sprites
 
-### Sheet: `public/sprites.png` (220×50)
+### Sheet: `public/sprites.png` (106×42)
 
 All game art is drawn **1:1** (no pixel doubling). No walk/facing animation frames on the
 sheet — character walk frames are derived at bake time (§3 Animation leg-cut).
@@ -582,45 +572,44 @@ sheet — character walk frames are derived at bake time (§3 Animation leg-cut)
 | Sprite | Origin | Size | Notes |
 |--------|--------|------|-------|
 | Unicorn (player) | (0,0) | 11×19 | Facing art TBD; no flips for now. Hitbox 11×11 bottom-aligned. Walk frames derived at bake (§3 leg-cut). |
-| Portal | (0,19) | 12×23 | Two 6×23 halves. Default (east): left slab in front of the pipe, right slab behind. flipH for west. Pipe bottom is 1px above the portal base. Also used for the plaza portal (cutscene/finale). |
-| Business Man (miniboss) | (11,0) | 11×19 | Shared by all 7 minibosses; eyes recolored per guarded color. Walk frames derived at bake (§3 leg-cut). |
-| Business Boss (finale) | (22,0) | 11×19 | Near-identical to Business Man on purpose. Walk frames derived at bake (§3 leg-cut). |
+| Portal | (0,19) | 12×23 | One sprite, never flipped. Pipe starts at the vertical seam so the sliced end reads in the crack. Also used for the plaza portal (cutscene/finale). Edge portals are the pipe-destroy targets (100 HP). |
+| Business Boss (finale) | (11,0) | 11×19 | Walk frames derived at bake (§3 leg-cut). |
 
-#### Common enemies (7×9 cells), from (33,0) left → right
+#### Common enemies (7×9 cells), from (22,0) left → right
 
 | # | Name | Origin |
 |---|------|--------|
-| 0 | Binder clip | (33,0) |
-| 1 | Pencil | (40,0) |
-| 2 | Pen | (47,0) |
-| 3 | Stapler | (54,0) |
-| 4 | Paperclip | (61,0) |
-| 5 | Calculator | (68,0) |
-| 6 | USB stick | (75,0) |
-| 7 | Scissors | (82,0) |
+| 0 | Binder clip | (22,0) |
+| 1 | Pencil | (29,0) |
+| 2 | Pen | (36,0) |
+| 3 | Stapler | (43,0) |
+| 4 | Paperclip | (50,0) |
+| 5 | Calculator | (57,0) |
+| 6 | USB stick | (64,0) |
+| 7 | Scissors | (71,0) |
 
 Hitboxes: **content-sized** (not the full padded cell). Sheet order differs from the
 difficulty ladder in §2 — map sheet index → difficulty tier in code.
 
-#### Pickups & shard, from (89,0)
+#### Pickups & horn, from (78,0)
 
 | Sprite | Origin | Size | Notes |
 |--------|--------|------|-------|
-| Crystal | (89,0) | 4×6 | In-run XP pickup |
-| Scrap | (93,0) | 6×6 | Meta-currency pickup; also drawn in the HUD counter |
-| Prismatic Shard | (99,0) | 7×11 | Cutscene narrator; hovers at world center |
+| Crystal | (78,0) | 4×6 | In-run XP pickup |
+| Scrap | (82,0) | 6×6 | Meta-currency pickup; also drawn in the HUD counter |
+| Unicorn horn | (88,0) | 17×9 | Lash visual (mid-body, flipH for left). Greys with locked yellow. |
 
 #### Pipes + flowers (lower strip from y=9)
 
-Pipes start at (33,9), packed with no gaps; then a **2px gap**; then flowers.
+Pipes start at (22,9), packed with no gaps; then a **2px gap**; then flowers.
 
 | Sprite | Origin | Size | Hitbox |
 |--------|--------|------|--------|
-| Pipe cap | (33,9) | 5×8 | Opaque metal; `b1b1b1` center dot; long black border against the pipe |
-| Pipe straight | (38,9) | 9×6 | Opaque metal; `b1b1b1` center stripe |
-| Pipe curve (outer accent) | (47,9) | 9×9 | SE ports; outer accent; `b1b1b1` center stripe |
-| Pipe curve (inner accent) | (56,9) | 9×9 | SE ports; inner accent; `b1b1b1` center stripe |
-| Flower 0–3 | (68,9), (75,9), (82,9), (89,9) | 7×10 cells | Decorative; non-solid (or TBD) |
+| Pipe cap | (22,9) | 5×8 | Opaque metal; `b1b1b1` center dot; long black border against the pipe |
+| Pipe straight | (27,9) | 9×6 | Opaque metal; `b1b1b1` center stripe |
+| Pipe curve (outer accent) | (36,9) | 9×9 | SE ports; outer accent; `b1b1b1` center stripe |
+| Pipe curve (inner accent) | (45,9) | 9×9 | SE ports; inner accent; `b1b1b1` center stripe |
+| Flower 0–3 | (57,9), (64,9), (71,9), (78,9) | 7×10 cells | Decorative; non-solid (or TBD) |
 
 `createSprite` supports flipH/flipV, `rot90` (CCW), and an optional rgb swap used to
 recolor the pipe stripe. Vertical straights use `rot90=1` so the dark accent lands
@@ -687,14 +676,15 @@ the rainbow colors.
 - XP curve (crystals per level) and inherent crystal/scrap drop chances per enemy type.
 - Combat numbers (placeholders in code, tune in play): horn lash timing/damage, nova
   period/duration/radius, white/orange/fireball damage, knockback, heal, freeze, yellow
-  burst duration and amount, yellow-miniboss period.
+  burst duration and amount.
 - Per-rank STR/CON/WIS amounts are in code (20% / +20 HP / 20% nova PWR); whether CON
   heals current HP when max HP grows.
 - Duplicate cards in a single hand: allowed or not.
 - Revive: HP restored and i-frames (likely needed so the swarm doesn't instantly re-kill);
   whether the revive count appears on the HUD.
 - Regular enemy HP and movement speed per type.
-- Whether the Prismatic Shard remains visible at the plaza during runs — **yes**, it stays.
+- Whether the Prismatic Shard remains visible at the plaza during runs — **no**,
+  removed (sprite and narrator). Unicorn speaks the second cutscene line.
 - Scrap shop prices; Start HP / Start Speed amounts per rank.
 - Settings / audio toggles on the title screen.
 - Exact per-enemy content hitbox rectangles (measure when wiring combat).
@@ -716,7 +706,7 @@ self-contained work any competent model can execute from this spec.
 Already built (no work needed): bake engine, palette/desaturation, pipes, world slices +
 plaza, camera, player movement/collision (§3), swarm core, starting-kit combat, packed
 font + HUD, menu/overlay framework (pause, level-up draft, stats), unified nova +
-projectiles + freeze, minibosses + pipe destruction + color wave.
+projectiles + freeze, edge portals + pipe destruction + color wave.
 
 | Phase | Work | Model | Why | Complete |
 |-------|------|-------|-----|----------|
@@ -724,8 +714,8 @@ projectiles + freeze, minibosses + pipe destruction + color wave.
 | 2 | **Starting-kit combat:** horn, white nova + knockback, enemy HP/death, pixel explosion, crystal/scrap drops, magnet + pickup | Capable | Fully specified, self-contained math; makes the game playable end-to-end early | ✅ |
 | 3 | **Packed font + HUD:** font renderer + label baking, XP bar, "Level #", scrap counter, color squares, pause icon | Capable | Well-bounded; unblocks every later text UI | ✅ |
 | 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere | ✅ |
-| 5 | **Powers:** unified nova (bitfield, concentric strokes, swept hit), projectiles, freeze/slow, WIS nova PWR | Flagship | One pulse shared by player, minibosses, and finale; color bits replace seven fireables | ✅ |
-| 6 | **Minibosses + pipe destruction:** engagement/leash/reset, nova vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | ✅ |
+| 5 | **Powers:** unified nova (bitfield, concentric strokes, swept hit), projectiles, freeze/slow, WIS nova PWR | Flagship | One pulse shared by player and finale; color bits replace seven fireables | ✅ |
+| 6 | **Portals + pipe destruction:** 100 HP edge portals, instant pipe remove + portal explosion, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | ✅ |
 | 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework | ✅ |
 | 8 | **Final boss + finale:** plaza portal, one rainbow nova, map-wide pursuit, win state | Capable | Reuses phase-5 nova and phase-6 patterns; numbers are specified | ✅ |
 | 9 | **Opening cutscene + dialogue UI:** panel component, scripted choreography, skip | Flagship | Scripted movement + sequenced pipe/color drain under tight bytes; first candidate on the fallback ladder, so cost judgment matters | ✅ |
@@ -735,12 +725,12 @@ Notes:
 
 - Phase 10 is next. Cutscene (`src/cutscene.ts`) plays on every Start:
   colored plaza, static boss + portal, one boss line, staggered pipe drop
-  (first pipe removes boss/portal), simultaneous reverse drain waves, shard
+  (first pipe removes boss/portal), simultaneous reverse drain waves, unicorn
   line. Any key/click advances a panel; during choreography it skips to the
   greyscale run start. Dialogue panel = framed speaker sprite + word-wrapped
-  packed-font lines. The shard stays at the plaza in title, cutscene, and run.
+  packed-font lines. No plaza shard.
 - Shop is 4 rows (Start HP / Start Speed / Magnet / Revive). Luck, shop stats,
   and XP/Scrap Gain are cut. Horn is a 1.5s left/right lash, not facing-aimed.
 - Audio stays deferred (not in the production zip) per §2. Remaining fallback
-  spend if still over: Start Speed row, simpler pipe death, remaining cutscene
-  motion / instant wave (last resort).
+  spend if still over: Start Speed row, remaining cutscene
+  motion / instant wave (last resort). Pipe death is already instant (one explosion).

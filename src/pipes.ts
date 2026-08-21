@@ -19,18 +19,65 @@ export interface PipePiece {
 }
 
 export const pipePieces: PipePiece[] = [];
-export const portalBacks: PipePiece[] = [];
-export const portalFronts: PipePiece[] = [];
-/** Bit i set = edge portal i is gone (removed when that color's restore wave starts). */
+export const portals: PipePiece[] = [];
+/** Bit i set = edge portal i is gone (removed when that pipe is destroyed). */
 export let portalsGone = 0;
 
-export function hidePipePortal(color: number): void {
+function hidePipePortal(color: number): void {
   portalsGone |= 1 << color;
 }
 /** Pieces per pipe, portal → cap. Same objects as `pipePieces`. */
 export const pipeRuns: PipePiece[][] = [];
-/** Miniboss stand positions, just inward of each portal. */
-export const pipeHomes: { x: number; y: number }[] = [];
+/** Remaining HP for the 7 edge portals. Plaza portal is not in this list. */
+export const portalHp: number[] = [];
+export const PORTAL_MAX_HP = 100;
+
+let slainPortal: { color: number; x: number; y: number } | null = null;
+
+export function takeSlainPortal(): { color: number; x: number; y: number } | null {
+  const slain = slainPortal;
+  slainPortal = null;
+  return slain;
+}
+
+/** 12×23 AABB, or null if that edge portal is gone. */
+export function portalHitbox(i: number): HitBox | null {
+  if (i >= 7 || portalsGone & (1 << i)) {
+    return null;
+  }
+  const p = portals[i];
+  return { x: p.x, y: p.y, w: PORTAL_W, h: PORTAL_H };
+}
+
+/** True if this hit killed the portal. Damage numbers are the caller's job. */
+export function damagePortal(i: number, amount: number): boolean {
+  const box = portalHitbox(i);
+  if (!box || amount <= 0 || portalHp[i] <= 0) {
+    return false;
+  }
+  portalHp[i] -= amount;
+  if (portalHp[i] > 0) {
+    return false;
+  }
+  portalHp[i] = 0;
+  slainPortal = { color: i, x: box.x + box.w / 2, y: box.y + box.h / 2 };
+  return true;
+}
+
+/** Remove every segment of a pipe and hide its edge portal. */
+export function destroyPipe(color: number): void {
+  hidePipePortal(color);
+  const run = pipeRuns[color];
+  if (!run) {
+    return;
+  }
+  for (let i = pipePieces.length - 1; i >= 0; i--) {
+    if (run.indexOf(pipePieces[i]) >= 0) {
+      pipePieces.splice(i, 1);
+    }
+  }
+  run.length = 0;
+}
 
 let currentRun: PipePiece[] = [];
 
@@ -45,15 +92,14 @@ const CENTER_X = WORLD_W / 2;
 const CENTER_Y = WORLD_H / 2;
 
 // Atlas
-const CAP = { x: 33, y: 9, w: 5, h: 8 };
-const STRAIGHT = { x: 38, y: 9, w: 9, h: 6 };
+const CAP = { x: 22, y: 9, w: 5, h: 8 };
+const STRAIGHT = { x: 27, y: 9, w: 9, h: 6 };
 /** SE elbow — dark accent on outer (south/east) edges */
-const CURVE_OUTER = { x: 47, y: 9, w: 9, h: 9 };
+const CURVE_OUTER = { x: 36, y: 9, w: 9, h: 9 };
 /** SE-shaped elbow — dark accent on inner edges */
-const CURVE_INNER = { x: 56, y: 9, w: 9, h: 9 };
-/** Two 6×23 halves. Default (east): left slab covers the pipe, right slab sits behind it. */
-const PORTAL_LEFT = { x: 0, y: 19, w: 6, h: 23 };
-const PORTAL_RIGHT = { x: 6, y: 19, w: 6, h: 23 };
+const CURVE_INNER = { x: 45, y: 9, w: 9, h: 9 };
+/** 12×23 monument. Same facing everywhere; pipe still leaves through the seam. */
+const PORTAL = { x: 0, y: 19, w: 12, h: 23 };
 const PORTAL_W = 12;
 const PORTAL_H = 23;
 const PIPE_H = 6;
@@ -89,10 +135,7 @@ const kits: PipeKit[] = [];
 /** Colorless twin (stripe left `b1b1b1`) of every colored kit canvas. */
 const greyTwin = new Map<HTMLCanvasElement, HTMLCanvasElement>();
 
-let portalLeft: HTMLCanvasElement;
-let portalRight: HTMLCanvasElement;
-let portalLeftFlip: HTMLCanvasElement;
-let portalRightFlip: HTMLCanvasElement;
+let portalSprite: HTMLCanvasElement;
 
 // Active kit while assembling one colored run
 let straightH: HTMLCanvasElement[];
@@ -249,17 +292,8 @@ function bakePieces(): void {
       kitCanvasList(kit).forEach((canvas, i) => greyTwin.set(canvas, greyList[i]));
     }
   }
-  if (!portalLeft) {
-    portalLeft = createSprite(PORTAL_LEFT.x, PORTAL_LEFT.y, PORTAL_LEFT.w, PORTAL_LEFT.h);
-    portalRight = createSprite(PORTAL_RIGHT.x, PORTAL_RIGHT.y, PORTAL_RIGHT.w, PORTAL_RIGHT.h);
-    portalLeftFlip = createSprite(PORTAL_LEFT.x, PORTAL_LEFT.y, PORTAL_LEFT.w, PORTAL_LEFT.h, true);
-    portalRightFlip = createSprite(
-      PORTAL_RIGHT.x,
-      PORTAL_RIGHT.y,
-      PORTAL_RIGHT.w,
-      PORTAL_RIGHT.h,
-      true
-    );
+  if (!portalSprite) {
+    portalSprite = createSprite(PORTAL.x, PORTAL.y, PORTAL.w, PORTAL.h);
   }
 }
 
@@ -457,16 +491,8 @@ export function pushCap(cx: number, cy: number, dir: number, hFlip: boolean, vFl
   }
 }
 
-function pushPortal(portalX: number, portalY: number, emergeEast: boolean): void {
-  if (emergeEast) {
-    // Pipe goes right: right slab behind, left slab covers
-    portalBacks.push({ canvas: portalRight, x: portalX + PORTAL_LEFT.w, y: portalY });
-    portalFronts.push({ canvas: portalLeft, x: portalX, y: portalY });
-  } else {
-    // Mirror: left slab behind, right slab covers
-    portalBacks.push({ canvas: portalRightFlip, x: portalX, y: portalY });
-    portalFronts.push({ canvas: portalLeftFlip, x: portalX + PORTAL_LEFT.w, y: portalY });
-  }
+function pushPortal(portalX: number, portalY: number): void {
+  portals.push({ canvas: portalSprite, x: portalX, y: portalY });
 }
 
 const SLOT = WORLD_W / 10;
@@ -668,18 +694,18 @@ function placePortal(
  */
 export function generatePipes(): void {
   pipePieces.length = 0;
-  portalBacks.length = 0;
-  portalFronts.length = 0;
+  portals.length = 0;
   portalsGone = 0;
   pipeRuns.length = 0;
-  pipeHomes.length = 0;
+  portalHp.length = 0;
+  slainPortal = null;
   bakePieces();
 
   for (let i = 0; i < 7; i++) {
     const [gx, gy] = PORTAL_CELLS[i];
     const { portalX, portalY, emergeEast } = placePortal(i, gx, gy);
 
-    const seamX = portalX + PORTAL_LEFT.w;
+    const seamX = portalX + PORTAL_W / 2;
     const cy = portalY + PORTAL_H - 1 - PIPE_H + PORT;
     const dir = emergeEast ? DIR_E : DIR_W;
     const startX = emergeEast ? seamX - 2 : seamX + 2;
@@ -692,31 +718,23 @@ export function generatePipes(): void {
     const targetX = CENTER_X + (dx / len) * capDist;
     const targetY = CENTER_Y + (dy / len) * capDist;
 
-    pushPortal(portalX, portalY, emergeEast);
+    pushPortal(portalX, portalY);
     useKit(i);
     currentRun = [];
     pipeRuns.push(currentRun);
-    pipeHomes.push({
-      x: emergeEast ? portalX + PORTAL_W + 4 : portalX - PLAYER_WIDTH - 4,
-      y: portalY + PORTAL_H - PLAYER_HEIGHT,
-    });
+    portalHp.push(PORTAL_MAX_HP);
     buildPipeSimple(i, startX, cy, dir, targetX, targetY);
   }
 }
 
 /**
- * The plaza portal's two slabs (right rim of the hub, facing west into the
- * plaza). The cutscene draws these itself so it can fade them and put actors
- * between the back and front slab.
+ * Plaza portal on the right rim of the hub.
  */
-export function plazaPortalParts(): { back: PipePiece; front: PipePiece } {
+export function plazaPortal(): PipePiece {
   const hub = hubRadiusTiles(0) * TILE_SIZE;
   const portalX = CENTER_X + hub - PORTAL_W * 0.4;
   const portalY = CENTER_Y - PORTAL_H / 2;
-  return {
-    back: { canvas: portalRightFlip, x: portalX, y: portalY },
-    front: { canvas: portalLeftFlip, x: portalX + PORTAL_LEFT.w, y: portalY },
-  };
+  return { canvas: portalSprite, x: portalX, y: portalY };
 }
 
 /**
@@ -724,25 +742,11 @@ export function plazaPortalParts(): { back: PipePiece; front: PipePiece } {
  * position just inside the plaza.
  */
 export function spawnPlazaPortal(): { x: number; y: number } {
-  const { back, front } = plazaPortalParts();
-  portalBacks.push(back);
-  portalFronts.push(front);
+  const piece = plazaPortal();
+  portals.push(piece);
   return {
-    x: back.x - PLAYER_WIDTH - 4,
-    y: back.y + PORTAL_H - PLAYER_HEIGHT,
+    x: piece.x - PLAYER_WIDTH - 4,
+    y: piece.y + PORTAL_H - PLAYER_HEIGHT,
   };
 }
 
-/** Pull the next portal-end segment off a pipe. Returns null when empty. */
-export function takePipeSegment(color: number): PipePiece | null {
-  const run = pipeRuns[color];
-  if (!run || run.length === 0) {
-    return null;
-  }
-  const piece = run.shift() as PipePiece;
-  const index = pipePieces.indexOf(piece);
-  if (index >= 0) {
-    pipePieces.splice(index, 1);
-  }
-  return piece;
-}

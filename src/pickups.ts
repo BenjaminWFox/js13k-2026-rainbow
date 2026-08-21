@@ -83,11 +83,11 @@ export function resetPickups(): void {
 }
 
 export function bakePickups(): void {
-  crystalSprite = createSprite(89, 0, CRYSTAL_W, CRYSTAL_H);
-  scrapSprite = createSprite(93, 0, SCRAP_W, SCRAP_H);
+  crystalSprite = createSprite(78, 0, CRYSTAL_W, CRYSTAL_H);
+  scrapSprite = createSprite(82, 0, SCRAP_W, SCRAP_H);
 }
 
-/** Miniboss / final-boss chunk: several independent rolls plus guaranteed scrap. */
+/** Final-boss chunk: several independent rolls plus guaranteed scrap. */
 export function dropBossLoot(x: number, y: number): void {
   for (let i = 0; i < 6; i++) {
     dropLoot(x + (Math.random() - 0.5) * 14, y + (Math.random() - 0.5) * 14);

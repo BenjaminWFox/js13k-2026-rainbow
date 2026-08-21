@@ -1,4 +1,4 @@
-import { PLAYER_HEIGHT, PLAYER_WIDTH, SHARD_X, SHARD_Y, TILE_SIZE } from './constants';
+import { PLAYER_HEIGHT, PLAYER_WIDTH, TILE_SIZE } from './constants';
 import { finalBossSprites } from './enemies';
 import { bakeText, FONT_H, measureText } from './font';
 import { anyKeyPressed, mouse } from './input';
@@ -9,36 +9,34 @@ import {
   greyPipeCanvas,
   type PipePiece,
   pipeRuns,
-  plazaPortalParts,
-  portalBacks,
-  portalFronts,
+  plazaPortal,
+  portals,
 } from './pipes';
 import { createSprite, rebakeAllSprites } from './sprites';
 
 // Opening cutscene: boss + portal already in the plaza, one line, pipes drop,
 // then all 7 reverse-waves run at once (portal → cap). Each color leaves the
-// rest of the world when its wave hits the cap. Shard gets the last line.
+// rest of the world when its wave hits the cap. Unicorn gets the last line.
 
 const PH_TALK = 0;
 const PH_PIPES = 1;
 const PH_DRAIN = 2;
-const PH_SHARD = 3;
+const PH_UNICORN = 3;
 
 const LINE_BOSS = 'ALRIGHT BOYS LAY THOSE PIPES! THESE COLORS WILL MAKE US RICH!';
-const LINE_SHARD = 'UNICORN! FIND WHERE THOSE PIPES GO AND DESTROY THEM!';
+const LINE_UNICORN = 'I MUST DESTROY THOSE PIPES!';
 const REVEAL_GAP_MS = 220;
 
 let onDone: (() => void) | null = null;
 let phase = PH_TALK;
 /** Time within the current phase (ms). */
 let t = 0;
-/** Total cutscene time (ms), for shard bob and the dialogue blink. */
+/** Total cutscene time (ms), for the dialogue blink. */
 let time = 0;
 /** Swallow the input that confirmed START on the same frame. */
 let skipGuard = false;
 
-let portalBack: PipePiece;
-let portalFront: PipePiece;
+let plazaGate: PipePiece;
 let showBoss = true;
 
 const boss = { x: 0, y: 0 };
@@ -55,7 +53,7 @@ const greySlice: HTMLCanvasElement[] = [];
 let dlgLines: HTMLCanvasElement[] = [];
 let dlgBakedW = -1;
 
-let shardSprite: HTMLCanvasElement | undefined;
+let unicornSprite: HTMLCanvasElement | undefined;
 
 export function startCutscene(done: () => void): void {
   onDone = done;
@@ -75,15 +73,13 @@ export function startCutscene(done: () => void): void {
   bakeTiles();
   rebakeAllSprites();
 
-  if (!shardSprite) {
-    shardSprite = createSprite(99, 0, 7, 11);
+  if (!unicornSprite) {
+    unicornSprite = createSprite(0, 0, PLAYER_WIDTH, PLAYER_HEIGHT);
   }
 
-  const parts = plazaPortalParts();
-  portalBack = parts.back;
-  portalFront = parts.front;
-  boss.x = portalBack.x - PLAYER_WIDTH - 4;
-  boss.y = portalBack.y + portalBack.canvas.height - PLAYER_HEIGHT;
+  plazaGate = plazaPortal();
+  boss.x = plazaGate.x - PLAYER_WIDTH - 4;
+  boss.y = plazaGate.y + plazaGate.canvas.height - PLAYER_HEIGHT;
 }
 
 /** Jump to the run-start state: all colors locked, all pipes standing. */
@@ -156,7 +152,7 @@ export function updateCutscene(dt: number): void {
       rebakeAllSprites();
     }
     if (live === 0) {
-      phase = PH_SHARD;
+      phase = PH_UNICORN;
       dlgBakedW = -1;
     }
   }
@@ -233,7 +229,7 @@ export function drawCutsceneDrain(
   }
 }
 
-/** World-space cutscene layer: revealed pipes, plaza portal, boss, shard. */
+/** World-space cutscene layer: revealed pipes, plaza portal, boss. */
 export function drawCutsceneWorld(
   ctx: CanvasRenderingContext2D,
   cameraX: number,
@@ -243,50 +239,24 @@ export function drawCutsceneWorld(
     return;
   }
   for (let i = 0; i < revealed; i++) {
-    const back = portalBacks[i];
-    ctx.drawImage(back.canvas, Math.floor(back.x - cameraX), Math.floor(back.y - cameraY));
+    const gate = portals[i];
+    ctx.drawImage(gate.canvas, Math.floor(gate.x - cameraX), Math.floor(gate.y - cameraY));
     for (const piece of pipeRuns[i]) {
       const canvas = i < drained ? piece.canvas : greyPipeCanvas(piece.canvas);
       ctx.drawImage(canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
     }
-    const front = portalFronts[i];
-    ctx.drawImage(front.canvas, Math.floor(front.x - cameraX), Math.floor(front.y - cameraY));
   }
 
   if (showBoss) {
     ctx.drawImage(
-      portalBack.canvas,
-      Math.floor(portalBack.x - cameraX),
-      Math.floor(portalBack.y - cameraY)
+      plazaGate.canvas,
+      Math.floor(plazaGate.x - cameraX),
+      Math.floor(plazaGate.y - cameraY)
     );
     if (finalBossSprites) {
       ctx.drawImage(finalBossSprites[0], Math.floor(boss.x - cameraX), Math.floor(boss.y - cameraY));
     }
-    ctx.drawImage(
-      portalFront.canvas,
-      Math.floor(portalFront.x - cameraX),
-      Math.floor(portalFront.y - cameraY)
-    );
   }
-
-  drawPlazaShard(ctx, cameraX, cameraY, time);
-}
-
-/** Shard hovering at the plaza. Title, cutscene, and run all use this position. */
-export function drawPlazaShard(
-  ctx: CanvasRenderingContext2D,
-  cameraX: number,
-  cameraY: number,
-  t: number
-): void {
-  if (!shardSprite) {
-    shardSprite = createSprite(99, 0, 7, 11);
-  }
-  ctx.drawImage(
-    shardSprite,
-    Math.floor(SHARD_X - cameraX),
-    Math.floor(SHARD_Y - cameraY) + Math.round(Math.sin(t / 300))
-  );
 }
 
 function wrap(text: string, maxW: number): string[] {
@@ -313,7 +283,7 @@ export function drawCutsceneUi(
   viewWidth: number,
   viewHeight: number
 ): void {
-  if (!onDone || (phase !== PH_TALK && phase !== PH_SHARD)) {
+  if (!onDone || (phase !== PH_TALK && phase !== PH_UNICORN)) {
     return;
   }
 
@@ -329,7 +299,7 @@ export function drawCutsceneUi(
 
   if (dlgBakedW !== textW) {
     dlgBakedW = textW;
-    dlgLines = wrap(phase === PH_SHARD ? LINE_SHARD : LINE_BOSS, textW).map((line) =>
+    dlgLines = wrap(phase === PH_UNICORN ? LINE_UNICORN : LINE_BOSS, textW).map((line) =>
       bakeText(line)
     );
   }
@@ -345,7 +315,7 @@ export function drawCutsceneUi(
   ctx.fillRect(fx, fy, frameW, frameH);
   ctx.fillStyle = '#000';
   ctx.fillRect(fx + 1, fy + 1, frameW - 2, frameH - 2);
-  const portrait = phase === PH_SHARD ? shardSprite : finalBossSprites?.[0];
+  const portrait = phase === PH_UNICORN ? unicornSprite : finalBossSprites?.[0];
   if (portrait) {
     ctx.drawImage(
       portrait,

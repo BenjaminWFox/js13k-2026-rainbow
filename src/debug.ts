@@ -17,7 +17,7 @@ import {
   setScrap,
   xp,
 } from './pickups';
-import { pipePieces } from './pipes';
+import { pipePieces, portalHitbox } from './pipes';
 import { getPlayerHitbox, player } from './player';
 import { createSprite, rebakeAllSprites } from './sprites';
 
@@ -33,19 +33,18 @@ const props: DebugProp[] = [];
 
 // Atlas regions for every non-player sprite on sprites.png (see SPEC.md)
 const ATLAS: { x: number; y: number; w: number; h: number }[] = [
-  { x: 11, y: 0, w: 11, h: 19 }, // Business Man
-  { x: 22, y: 0, w: 11, h: 19 }, // Business Boss
-  { x: 0, y: 19, w: 6, h: 23 }, // Portal left
-  { x: 6, y: 19, w: 6, h: 23 }, // Portal right
-  // Common enemies 7x9 from (33,0)
-  ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ x: 33 + i * 7, y: 0, w: 7, h: 9 })),
-  // Pipes from (33,9)
-  { x: 33, y: 9, w: 5, h: 8 }, // cap
-  { x: 38, y: 9, w: 9, h: 6 }, // straight
-  { x: 47, y: 9, w: 9, h: 9 }, // curve outer accent (SE)
-  { x: 56, y: 9, w: 9, h: 9 }, // curve inner accent (→ NW)
-  // Flowers 7x10 from (68,9)
-  ...[0, 1, 2, 3].map((i) => ({ x: 68 + i * 7, y: 9, w: 7, h: 10 })),
+  { x: 11, y: 0, w: 11, h: 19 }, // Business Boss
+  { x: 0, y: 19, w: 12, h: 23 }, // Portal
+  // Common enemies 7x9 from (22,0)
+  ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ x: 22 + i * 7, y: 0, w: 7, h: 9 })),
+  // Pipes from (22,9)
+  { x: 22, y: 9, w: 5, h: 8 }, // cap
+  { x: 27, y: 9, w: 9, h: 6 }, // straight
+  { x: 36, y: 9, w: 9, h: 9 }, // curve outer accent (SE)
+  { x: 45, y: 9, w: 9, h: 9 }, // curve inner accent (→ NW)
+  // Flowers 7x10 from (57,9)
+  ...[0, 1, 2, 3].map((i) => ({ x: 57 + i * 7, y: 9, w: 7, h: 10 })),
+  { x: 88, y: 0, w: 17, h: 9 }, // unicorn horn
 ];
 
 function mulberry32(seed: number): () => number {
@@ -221,6 +220,20 @@ export function drawDebugOverlay(
         box.w,
         box.h,
         '#f0f'
+      );
+    }
+    for (let i = 0; i < 7; i++) {
+      const box = portalHitbox(i);
+      if (!box) {
+        continue;
+      }
+      debugRect(
+        ctx,
+        Math.floor(box.x - cameraX),
+        Math.floor(box.y - cameraY),
+        box.w,
+        box.h,
+        '#fa0'
       );
     }
     for (const p of pickups) {

@@ -13,8 +13,6 @@ export const MAP_HEIGHT = 100;
 /** Plaza spawn; y is 5px above tile-center so it matches the title tableau. */
 export const PLAYER_SPAWN_X = (MAP_WIDTH / 2) * TILE_SIZE;
 export const PLAYER_SPAWN_Y = (MAP_HEIGHT / 2) * TILE_SIZE - 5;
-export const SHARD_X = PLAYER_SPAWN_X + 2;
-export const SHARD_Y = PLAYER_SPAWN_Y - 25;
 
 // Pixels per millisecond
 export const PLAYER_SPEED = 0.05;

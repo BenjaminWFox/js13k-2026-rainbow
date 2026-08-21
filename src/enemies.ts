@@ -9,15 +9,14 @@ import {
 } from './constants';
 import { spawnDamageNumber, spawnExplosion } from './fx';
 import { getTile, TILE_WALL } from './map';
-import { RAINBOW_COLORS } from './palette';
 import { dropBossLoot, dropLoot } from './pickups';
-import { pipeHomes, pipePieces } from './pipes';
+import { pipePieces } from './pipes';
 import { damagePlayer, getPlayerHitbox } from './player';
-import { afterRebake, createSprite, createWalkSprites, measureContentBox } from './sprites';
+import { createSprite, createWalkSprites, measureContentBox } from './sprites';
 
 /**
  * Difficulty ladder (easiest → hardest) mapped to sheet cell index within the
- * 7×9 enemy strip at (33,0). Ladder order: paperclip, pencil, binder clip,
+ * 7×9 enemy strip at (22,0). Ladder order: paperclip, pencil, binder clip,
  * pen, USB stick, stapler, calculator, scissors.
  */
 const TIER_SHEET_INDEX = [4, 1, 0, 2, 6, 3, 5, 7];
@@ -32,15 +31,9 @@ const TELEPORT_FACTOR = 1.75;
 const CONTACT_TICK_MS = 500;
 // px/ms — per-type speeds TBD; every type shares this for now (player is 0.05)
 const ENEMY_SPEED = 0.03;
-const MINI_SPEED = 0.04;
-const MINI_SPEED_YELLOW = 0.06;
 const FINAL_HP = 200;
-/** `color` on the final boss; minibosses use 0–6, regulars use -1. */
+/** `color` on the final boss; regulars use -1. */
 export const FINAL_BOSS = -2;
-const CHASE_IN = 75;
-const CHASE_OUT = 250;
-const RESET_RANGE = 500;
-const MINI_CONTACT = 5;
 const BOB_PERIOD_MS = 900;
 const MINI_HIT_Y = PLAYER_HEIGHT - PLAYER_HIT;
 
@@ -79,11 +72,11 @@ export interface Enemy {
   contactTimer: number;
   /** Remaining freeze (ms). Frozen entities take +25% damage. */
   frozen: number;
-  /** Remaining slow (ms). Minibosses/boss get this instead of freeze. */
+  /** Remaining slow (ms). The final boss gets this instead of freeze. */
   slowed: number;
-  /** True for minibosses and the final boss: CC slows instead of freezing. */
+  /** True for the final boss: CC slows instead of freezing. */
   boss: boolean;
-  /** -1 = regular enemy; 0–6 = the miniboss that guards that color. */
+  /** -1 = regular enemy; FINAL_BOSS for the finale. */
   color: number;
   maxHp: number;
   homeX: number;
@@ -102,11 +95,6 @@ export const enemies: Enemy[] = [];
 // Tiers allowed to spawn; each destroyed pipe unlocks the next type
 let unlockedTiers = 1;
 
-/**
- * Shared Business Man bakes, eyes tinted per color — also cutscene actors.
- * Each entry is [idle, left leg-cut, right leg-cut] (§3 Animation).
- */
-export const minibossSprites: HTMLCanvasElement[][] = [];
 export let finalBossSprites: HTMLCanvasElement[] | undefined;
 
 const miniHit = {
@@ -115,18 +103,10 @@ const miniHit = {
   hitW: PLAYER_HIT,
   hitH: PLAYER_HIT,
   radius: PLAYER_HIT / 2,
-  contactDamage: MINI_CONTACT,
+  contactDamage: 5,
 };
 
-/** Set when a miniboss dies; consumed the same frame to start the death sequence. */
-let slainMiniboss: { color: number; x: number; y: number } | null = null;
 let slainFinalBoss = false;
-
-export function takeSlainMiniboss(): { color: number; x: number; y: number } | null {
-  const slain = slainMiniboss;
-  slainMiniboss = null;
-  return slain;
-}
 
 export function takeSlainFinalBoss(): boolean {
   const slain = slainFinalBoss;
@@ -145,25 +125,10 @@ function hitOf(enemy: Enemy): {
   return enemy.boss ? miniHit : enemyTypes[enemy.type];
 }
 
-function tintEyes(canvas: HTMLCanvasElement, rgb: number): void {
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-  ctx.fillStyle = '#' + rgb.toString(16).padStart(6, '0');
-  ctx.fillRect(4, 6, 1, 1);
-  ctx.fillRect(6, 6, 1, 1);
-}
-
-function retintBossEyes(): void {
-  for (let i = 0; i < minibossSprites.length; i++) {
-    for (const frame of minibossSprites[i]) {
-      tintEyes(frame, RAINBOW_COLORS[i]);
-    }
-  }
-}
-
 /** Bake one canvas + content hitbox per enemy type. Call once after the sheet loads. */
 export function bakeEnemyTypes(): void {
   for (let tier = 0; tier < TIER_SHEET_INDEX.length; tier++) {
-    const sheetX = 33 + TIER_SHEET_INDEX[tier] * 7;
+    const sheetX = 22 + TIER_SHEET_INDEX[tier] * 7;
     const box = measureContentBox(sheetX, 0, 7, 9);
     enemyTypes.push({
       canvas: createSprite(sheetX, 0, 7, 9),
@@ -176,16 +141,9 @@ export function bakeEnemyTypes(): void {
       hp: 8 + tier * 4,
     });
   }
-  if (minibossSprites.length === 0) {
-    for (let i = 0; i < 7; i++) {
-      minibossSprites.push(createWalkSprites(11, 0, 11, 19));
-    }
-    afterRebake(retintBossEyes);
-  }
   if (!finalBossSprites) {
-    finalBossSprites = createWalkSprites(22, 0, 11, 19);
+    finalBossSprites = createWalkSprites(11, 0, 11, 19);
   }
-  retintBossEyes();
 }
 
 let spawnTimer = 0;
@@ -195,9 +153,7 @@ export function resetEnemies(): void {
   enemies.length = 0;
   spawnTimer = 0;
   unlockedTiers = 1;
-  slainMiniboss = null;
   slainFinalBoss = false;
-  spawnMinibosses();
 }
 
 function makeEnemy(
@@ -230,20 +186,6 @@ function makeEnemy(
   };
 }
 
-function spawnMinibosses(): void {
-  for (let i = 0; i < pipeHomes.length; i++) {
-    const home = pipeHomes[i];
-    enemies.push(
-      makeEnemy(home.x, home.y, 100, {
-        boss: true,
-        color: i,
-        homeX: home.x,
-        homeY: home.y,
-      })
-    );
-  }
-}
-
 export function spawnFinalBoss(x: number, y: number): void {
   enemies.push(
     makeEnemy(x, y, FINAL_HP, {
@@ -274,7 +216,6 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     const type = hitOf(enemy);
-    const isMini = enemy.color >= 0;
     if (enemy.frozen > 0) {
       enemy.frozen = Math.max(0, enemy.frozen - dt);
     } else if (!enemy.boss) {
@@ -317,18 +258,7 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
       continue;
     }
 
-    if (isMini) {
-      if (dist > RESET_RANGE) {
-        enemy.hp = enemy.maxHp;
-        enemy.boost = 0;
-        enemy.slowed = 0;
-        enemy.chasing = false;
-      } else if (dist > CHASE_OUT) {
-        enemy.chasing = false;
-      } else if (dist < CHASE_IN) {
-        enemy.chasing = true;
-      }
-    } else if (enemy.boss) {
+    if (enemy.boss) {
       enemy.chasing = true;
     }
 
@@ -351,28 +281,15 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
       }
     }
 
-    let moveX = towardX;
-    let moveY = towardY;
-    let moveDist = dist;
-    let speed = ENEMY_SPEED;
-    if (enemy.color === FINAL_BOSS) {
-      speed = PLAYER_SPEED;
-    } else if (isMini) {
-      speed = enemy.boost > 0 ? MINI_SPEED_YELLOW : MINI_SPEED;
-      if (!enemy.chasing) {
-        moveX = enemy.homeX - enemy.x;
-        moveY = enemy.homeY - enemy.y;
-        moveDist = Math.hypot(moveX, moveY);
-      }
-    }
+    const speed = enemy.boss ? PLAYER_SPEED : ENEMY_SPEED;
 
     // Chase: straight toward the player; walls block, pipes don't
     const preX = enemy.x;
     const preY = enemy.y;
-    if (moveDist > 1 && enemy.frozen <= 0) {
+    if (dist > 1 && enemy.frozen <= 0) {
       const step = speed * (enemy.slowed > 0 ? 0.5 : 1) * dt;
-      const dx = (moveX / moveDist) * step;
-      const dy = (moveY / moveDist) * step;
+      const dx = (towardX / dist) * step;
+      const dy = (towardY / dist) * step;
       if (!hitsWall(enemy.x + type.hitX + dx, enemy.y + type.hitY, type.hitW, type.hitH)) {
         enemy.x += dx;
       }
@@ -602,10 +519,7 @@ export function drawEnemies(
     if (!enemy.boss) {
       continue;
     }
-    const frames =
-      enemy.color === FINAL_BOSS
-        ? (finalBossSprites as HTMLCanvasElement[])
-        : minibossSprites[enemy.color];
+    const frames = finalBossSprites as HTMLCanvasElement[];
     const canvas = frames[enemy.moving ? 1 + (((enemy.bobTime / WALK_FRAME_MS) | 0) % 2) : 0];
     const screenX = Math.floor(enemy.x - cameraX);
     const screenY = Math.floor(enemy.y - cameraY);
@@ -642,7 +556,7 @@ export function enemyHitbox(enemy: Enemy): { x: number; y: number; w: number; h:
   return { x: enemy.x + type.hitX, y: enemy.y + type.hitY, w: type.hitW, h: type.hitH };
 }
 
-/** Freeze regulars; minibosses/boss are slowed for 2× the duration instead. */
+/** Freeze regulars; the final boss is slowed for 2× the duration instead. */
 export function crowdControl(enemy: Enemy, freezeMs: number): void {
   if (enemy.boss) {
     enemy.slowed = Math.max(enemy.slowed, freezeMs * 2);
@@ -676,14 +590,9 @@ export function hurtEnemyAt(index: number, amount: number): boolean {
   }
   if (enemy.boss) {
     dropBossLoot(cx, cy);
-    if (enemy.color === FINAL_BOSS) {
-      spawnExplosion(cx, cy, 0x000000, 22);
-      spawnExplosion(cx, cy, 0xffffff, 14);
-      slainFinalBoss = true;
-    } else {
-      spawnExplosion(cx, cy, RAINBOW_COLORS[enemy.color], 18);
-      slainMiniboss = { color: enemy.color, x: cx, y: cy };
-    }
+    spawnExplosion(cx, cy, 0x000000, 22);
+    spawnExplosion(cx, cy, 0xffffff, 14);
+    slainFinalBoss = true;
     enemies.splice(index, 1);
     return true;
   }
@@ -695,30 +604,6 @@ function killRegularAt(index: number, cx: number, cy: number): void {
   spawnExplosion(cx, cy, 0xb1b1b1, 12);
   dropLoot(cx, cy);
   enemies.splice(index, 1);
-}
-
-/** Kill visible regulars so they drop loot; minibosses are left alone. */
-export function killOnScreenRegulars(
-  camX: number,
-  camY: number,
-  viewW: number,
-  viewH: number
-): void {
-  for (let i = enemies.length - 1; i >= 0; i--) {
-    if (enemies[i].boss) {
-      continue;
-    }
-    const box = enemyHitbox(enemies[i]);
-    if (
-      box.x + box.w < camX ||
-      box.x > camX + viewW ||
-      box.y + box.h < camY ||
-      box.y > camY + viewH
-    ) {
-      continue;
-    }
-    killRegularAt(i, box.x + box.w / 2, box.y + box.h / 2);
-  }
 }
 
 export function unlockNextTier(): void {
