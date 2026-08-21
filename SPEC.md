@@ -35,15 +35,16 @@ These rules govern how code is written for this project.
    - This sums close to (or over) the 13 KB cap — expect to spend from the **fallback
      ladder**, cheapest pain first:
      1. Opening cutscene becomes static dialogue panels (no choreographed movement).
-        **Partial:** walk-on / march / extra dialogue are gone; pipe-drop + simultaneous
+        **Partial:** walk-on / march / extra dialogue are gone; pipe-drop + per-pipe
         drain waves remain.
      2. Cut surge spawns and the stretch difficulty modes. **Never shipped (0 B).**
      3. Drop scrap-shop rows (never the whole shop). **Done for this build:** Luck,
         shop STR/DEX/CON/WIS, XP Gain, Scrap Gain. **Still in:** Start HP, Start Speed,
         Magnet, Revive.
-     4. Straighten the procedural pipes — **done for the competition build** (simple
-        straight / diagonal layouts). The old snake walker is kept for the Director's Cut
-        (rule 10), not deleted.
+     4. Straighten the procedural pipes — **done, then further cut:** competition
+        pipes are portal stubs (3 straights + cap, inward) plus capped debris in
+        each color slice. No curves. The old snake walker is Director's Cut
+        (rule 10); restoring it also needs the removed elbow art.
      5. Shrink the audio reservation. **Done:** production ships no ZzFX/ZzFXM; synth
         lives only in `_sample-game/`.
 7. **No external dependencies at runtime.** Everything is hand-rolled or vendored (ZzFX/ZzFXM
@@ -61,7 +62,7 @@ These rules govern how code is written for this project.
 
     | Module | What it restores | How to enable |
     |--------|------------------|---------------|
-    | [`src/directors-cut/pipe-snake.ts`](src/directors-cut/pipe-snake.ts) | Occupancy-grid snake pipes (S/C shapes, random run lengths, jittered portal insets) | In `generatePipes` (`src/pipes.ts`), call `buildPipeSnake(...)` instead of `buildPipeSimple`; optionally use `portalFromCellRandom` |
+    | [`src/directors-cut/pipe-snake.ts`](src/directors-cut/pipe-snake.ts) | Occupancy-grid snake pipes (S/C shapes). Needs old curve kit + elbow art restored to the sheet. | `portalFromCellRandom` is still here; the walker itself is in git history on this file until curves return. |
 
 All timing in this spec is expressed in **real time** (seconds/minutes), never frames.
 
@@ -118,14 +119,13 @@ greyscale run-start state).
 
 1. Opens on the plaza: unicorn below, **Business Boss** standing at a plaza portal.
    The world is fully colored. No pipes yet.
-2. Boss panel: *"ALRIGHT BOYS LAY THOSE PIPES! THESE COLORS WILL MAKE US RICH!"*
+2. Boss panel: *"THE PORTALS WORK! TIME TO STEAL THESE VALUABLE COLORS!"*
 3. The **seven pipes drop** in (staggered). The first pipe removes the boss and plaza
-   portal.
-4. **All seven reverse drain waves** start together (portal → cap). Inside each circle
-   that slice greys; when a wave hits its cap, that color unlocks off the rest of the
-   world (tiles, unicorn).
-5. Unicorn panel: *"I MUST DESTROY THOSE PIPES!"*
-6. The run starts (greyscale, pipes in place).
+   portal. **Each drop starts that color's reverse drain** from its **plaza-side cap**.
+   Inside each circle that slice greys; when a wave finishes, that color unlocks off
+   the rest of the world (tiles, unicorn).
+4. Unicorn panel: *"I MUST FIND AND DESTROY THOSE PORTALS!"*
+5. The run starts (greyscale, pipes in place).
 
 ### Run loop
 
@@ -526,29 +526,22 @@ No font lives on the sprite sheet. Text uses a **bit-packed 3×5 pixel font**:
   enemies.
 - **Pipes (competition layout):** 7 portals on a 10×10 edge map (cells `(0,0)` red NW,
   `(5,0)` orange N, `(9,0)` yellow NE, `(0,5)` green W, `(9,5)` blue E, `(0,9)` indigo SW,
-  `(5,9)` violet S), inset 75px. Portals are unflipped; west-side pipes still
-  emerge west from the seam. Two run modes only:
-  - **Straight** — one heading from portal to hub. Green: left → right. Blue: right → left.
-    Orange: top → bottom with **one curve** out of the portal (pipe leaves E/W). Violet:
-    bottom → top with the same portal curve.
-  - **Diagonal** — alternating straight / curve. Red: top-left → bottom-right. Yellow:
-    top-right → bottom-left. Indigo: bottom-left → top-right.
-  Cardinals sit on the world midlines so a single heading hits the hub. Each run ends at a
-  cap just outside the plaza hub (still on that pipe's color).
-  Built from straight + curve + cap only. Caps seal inward ends; portal origin
-  has no cap. Each run is assigned one rainbow color; the authored `b1b1b1`
-  center stripe (dot on caps) is remapped to that color at bake and **stays
-  colored** even while the world is greyscale (exempt from desaturation). Dark accents stay continuous by flipping straights (and caps)
-  when an elbow's port has the highlight on the opposite side — H uses flipV
-  (accent top), V uses flipV+rot90 (accent left). Outer + inner elbows cover all
-  four corners at both accent modes.
+  `(5,9)` violet S), inset 75px. Portals are unflipped. From each portal, a **stub** of
+  **3 straights + a cap** runs **inward** (toward the plaza). Corners on a west/east wall
+  go horizontal; N/S edge portals emit from the bottom/top of the monument. **No curves.**
+  **Plaza run:** one capped pipe per color (3–6 straights, cap both ends) just off the
+  hub, aimed out along that slice. Both vanish with the portal. Opening drain waves
+  originate at each plaza-side cap.
+  Each run is assigned one rainbow color; the authored `b1b1b1` center stripe (dot on
+  caps) is remapped to that color at bake and **stays colored** even while the world is
+  greyscale (exempt from desaturation). Vertical straights use `rot90=1`.
   The old occupancy-grid snake (S/C shapes, random run lengths, player-width gaps, jittered
   insets) is **Director's Cut** — [`src/directors-cut/pipe-snake.ts`](src/directors-cut/pipe-snake.ts),
-  not shipped. See §1 rule 10.
+  not shipped (also needs the removed elbow sprites). See §1 rule 10.
 - Pipes block **player movement** only: enemies walk over them, projectiles fly over them.
-- **Authoring: hybrid** — competition pipes are the two simple modes above; ground slices
-  still aim at the portal cells. The Director's Cut snake is seeded procedural. Any future
-  landmarks / major walls would be hand-placed with seeded decoration/fill.
+- **Authoring: hybrid** — competition pipes are portal stubs + one plaza run per color;
+  ground slices still aim at the portal cells. Any future landmarks / major walls would
+  be hand-placed with seeded decoration/fill.
 
 ### Game state
 
@@ -562,7 +555,7 @@ No font lives on the sprite sheet. Text uses a **bit-packed 3×5 pixel font**:
 
 ## 4. Sprites
 
-### Sheet: `public/sprites.png` (106×42)
+### Sheet: `public/sprites.png` (50×42)
 
 All game art is drawn **1:1** (no pixel doubling). No walk/facing animation frames on the
 sheet — character walk frames are derived at bake time (§3 Animation leg-cut).
@@ -572,10 +565,10 @@ sheet — character walk frames are derived at bake time (§3 Animation leg-cut)
 | Sprite | Origin | Size | Notes |
 |--------|--------|------|-------|
 | Unicorn (player) | (0,0) | 11×19 | Facing art TBD; no flips for now. Hitbox 11×11 bottom-aligned. Walk frames derived at bake (§3 leg-cut). |
-| Portal | (0,19) | 12×23 | One sprite, never flipped. Pipe starts at the vertical seam so the sliced end reads in the crack. Also used for the plaza portal (cutscene/finale). Edge portals are the pipe-destroy targets (100 HP). |
+| Portal | (0,19) | 12×23 | One sprite, never flipped. E/W stubs leave through the vertical seam; N/S stubs leave the bottom/top of the monument. Also used for the plaza portal (cutscene/finale). Edge portals are the pipe-destroy targets (100 HP). |
 | Business Boss (finale) | (11,0) | 11×19 | Walk frames derived at bake (§3 leg-cut). |
 
-#### Common enemies (7×9 cells), from (22,0) left → right
+#### Common enemies (7×9 cells), two rows from (22,0)
 
 | # | Name | Origin |
 |---|------|--------|
@@ -583,37 +576,31 @@ sheet — character walk frames are derived at bake time (§3 Animation leg-cut)
 | 1 | Pencil | (29,0) |
 | 2 | Pen | (36,0) |
 | 3 | Stapler | (43,0) |
-| 4 | Paperclip | (50,0) |
-| 5 | Calculator | (57,0) |
-| 6 | USB stick | (64,0) |
-| 7 | Scissors | (71,0) |
+| 4 | Paperclip | (22,9) |
+| 5 | Calculator | (29,9) |
+| 6 | USB stick | (36,9) |
+| 7 | Scissors | (43,9) |
 
 Hitboxes: **content-sized** (not the full padded cell). Sheet order differs from the
 difficulty ladder in §2 — map sheet index → difficulty tier in code.
 
-#### Pickups & horn, from (78,0)
+#### Pickups, flowers, pipes, horn — right of the portal
+
+Flowers / crystal / scrap sit just right of the portal (y=19). Cap, straight, and horn
+pack below them (y=29).
 
 | Sprite | Origin | Size | Notes |
 |--------|--------|------|-------|
-| Crystal | (78,0) | 4×6 | In-run XP pickup |
-| Scrap | (82,0) | 6×6 | Meta-currency pickup; also drawn in the HUD counter |
-| Unicorn horn | (88,0) | 17×9 | Lash visual (mid-body, flipH for left). Greys with locked yellow. |
+| Flower 0–3 | (12,19), (19,19), (26,19), (33,19) | 7×10 cells | Decorative; debug scatter only |
+| Crystal | (40,19) | 4×6 | In-run XP pickup |
+| Scrap | (44,19) | 6×6 | Meta-currency pickup; also drawn in the HUD counter |
+| Pipe cap | (12,29) | 5×8 | Opaque metal; `b1b1b1` center dot; long black border against the pipe |
+| Pipe straight | (17,29) | 9×6 | Opaque metal; `b1b1b1` center stripe |
+| Unicorn horn | (26,29) | 17×9 | Lash visual (mid-body, flipH for left). Greys with locked yellow. |
 
-#### Pipes + flowers (lower strip from y=9)
-
-Pipes start at (22,9), packed with no gaps; then a **2px gap**; then flowers.
-
-| Sprite | Origin | Size | Hitbox |
-|--------|--------|------|--------|
-| Pipe cap | (22,9) | 5×8 | Opaque metal; `b1b1b1` center dot; long black border against the pipe |
-| Pipe straight | (27,9) | 9×6 | Opaque metal; `b1b1b1` center stripe |
-| Pipe curve (outer accent) | (36,9) | 9×9 | SE ports; outer accent; `b1b1b1` center stripe |
-| Pipe curve (inner accent) | (45,9) | 9×9 | SE ports; inner accent; `b1b1b1` center stripe |
-| Flower 0–3 | (57,9), (64,9), (71,9), (78,9) | 7×10 cells | Decorative; non-solid (or TBD) |
-
-`createSprite` supports flipH/flipV, `rot90` (CCW), and an optional rgb swap used to
-recolor the pipe stripe. Vertical straights use `rot90=1` so the dark accent lands
-on the right. No diagonal pipe piece.
+No curve / elbow pieces on the sheet. `createSprite` supports flipH/flipV, `rot90` (CCW),
+and an optional rgb swap used to recolor the pipe stripe. Vertical straights use
+`rot90=1`. No diagonal pipe piece.
 
 #### Not on the sheet — code-drawn primitives
 
@@ -725,7 +712,7 @@ Notes:
 
 - Phase 10 is next. Cutscene (`src/cutscene.ts`) plays on every Start:
   colored plaza, static boss + portal, one boss line, staggered pipe drop
-  (first pipe removes boss/portal), simultaneous reverse drain waves, unicorn
+  (first pipe removes boss/portal; each drop starts that color's drain), unicorn
   line. Any key/click advances a panel; during choreography it skips to the
   greyscale run start. Dialogue panel = framed speaker sprite + word-wrapped
   packed-font lines. No plaza shard.

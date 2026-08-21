@@ -1,30 +1,23 @@
-import { PLAYER_HEIGHT, PLAYER_WIDTH, TILE_SIZE } from './constants';
+import { MAP_HEIGHT, MAP_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH, TILE_SIZE } from './constants';
 import { finalBossSprites } from './enemies';
 import { bakeText, FONT_H, measureText } from './font';
 import { anyKeyPressed, mouse } from './input';
 import { bakeTiles, getTile, tileCanvases } from './map';
 import { colorWave, WAVE_SPEED } from './overlays';
 import { unlockedColors } from './palette';
-import {
-  greyPipeCanvas,
-  type PipePiece,
-  pipeRuns,
-  plazaPortal,
-  portals,
-} from './pipes';
+import { drainCaps, type PipePiece, pipeRuns, plazaPortal, portals } from './pipes';
 import { createSprite, rebakeAllSprites } from './sprites';
 
-// Opening cutscene: boss + portal already in the plaza, one line, pipes drop,
-// then all 7 reverse-waves run at once (portal → cap). Each color leaves the
-// rest of the world when its wave hits the cap. Unicorn gets the last line.
+// Opening cutscene: boss + portal already in the plaza, one line, then pipes
+// drop staggered. Each drop starts that color's drain from the plaza cap.
+// Unicorn gets the last line once every slice is grey.
 
 const PH_TALK = 0;
 const PH_PIPES = 1;
-const PH_DRAIN = 2;
-const PH_UNICORN = 3;
+const PH_UNICORN = 2;
 
-const LINE_BOSS = 'ALRIGHT BOYS LAY THOSE PIPES! THESE COLORS WILL MAKE US RICH!';
-const LINE_UNICORN = 'I MUST DESTROY THOSE PIPES!';
+const LINE_BOSS = 'THE PORTALS WORK! TIME TO STEAL THESE VALUABLE COLORS!';
+const LINE_UNICORN = 'I MUST FIND AND DESTROY THOSE PORTALS!';
 const REVEAL_GAP_MS = 220;
 
 let onDone: (() => void) | null = null;
@@ -41,13 +34,17 @@ let showBoss = true;
 
 const boss = { x: 0, y: 0 };
 
-/** Pipes revealed so far (colorless until that pipe's drain wave). */
+/** Pipes revealed so far (drain starts on each drop). */
 let revealed = 0;
-/** Drain waves started (also used to color that pipe's stripe). */
-let drained = 0;
 
-const drainWaves: { x: number; y: number; r: number; maxR: number; color: number; active: boolean }[] =
-  [];
+const drainWaves: {
+  x: number;
+  y: number;
+  r: number;
+  maxR: number;
+  color: number;
+  active: boolean;
+}[] = [];
 const greySlice: HTMLCanvasElement[] = [];
 
 let dlgLines: HTMLCanvasElement[] = [];
@@ -62,7 +59,6 @@ export function startCutscene(done: () => void): void {
   time = 0;
   skipGuard = true;
   revealed = 0;
-  drained = 0;
   drainWaves.length = 0;
   showBoss = true;
   dlgBakedW = -1;
@@ -121,17 +117,10 @@ export function updateCutscene(dt: number): void {
 
   if (phase === PH_PIPES) {
     while (revealed < 7 && t >= revealed * REVEAL_GAP_MS) {
+      startDrainWave(revealed);
       revealed++;
       showBoss = false;
     }
-    if (revealed >= 7) {
-      phase = PH_DRAIN;
-      startDrainWaves();
-    }
-    return;
-  }
-
-  if (phase === PH_DRAIN) {
     let live = 0;
     let locked = false;
     for (const wave of drainWaves) {
@@ -151,48 +140,48 @@ export function updateCutscene(dt: number): void {
       bakeTiles();
       rebakeAllSprites();
     }
-    if (live === 0) {
+    if (revealed >= 7 && live === 0) {
       phase = PH_UNICORN;
       dlgBakedW = -1;
     }
   }
 }
 
-function startDrainWaves(): void {
-  drained = 7;
-  drainWaves.length = 0;
-  for (let i = 0; i < 7; i++) {
-    const run = pipeRuns[i];
-    const start = run[0];
-    const cap = run[run.length - 1];
-    const ox = start.x + start.canvas.width / 2;
-    const oy = start.y + start.canvas.height / 2;
-    const cx = cap.x + cap.canvas.width / 2;
-    const cy = cap.y + cap.canvas.height / 2;
-    drainWaves.push({
-      x: ox,
-      y: oy,
-      r: 0,
-      maxR: Math.hypot(cx - ox, cy - oy),
-      color: i,
-      active: true,
-    });
-    unlockedColors[i] = false;
-    bakeTiles();
-    let canvas = greySlice[i];
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvas.width = TILE_SIZE;
-      canvas.height = TILE_SIZE;
-      greySlice[i] = canvas;
-    }
-    (canvas.getContext('2d') as CanvasRenderingContext2D).drawImage(tileCanvases[i], 0, 0);
-    unlockedColors[i] = true;
+function startDrainWave(color: number): void {
+  const worldW = MAP_WIDTH * TILE_SIZE;
+  const worldH = MAP_HEIGHT * TILE_SIZE;
+  const cap = drainCaps[color];
+  const gate = portals[color];
+  const ox = cap ? cap.x : gate.x + gate.canvas.width / 2;
+  const oy = cap ? cap.y : gate.y + gate.canvas.height / 2;
+  drainWaves.push({
+    x: ox,
+    y: oy,
+    r: 0,
+    maxR: Math.max(
+      Math.hypot(ox, oy),
+      Math.hypot(worldW - ox, oy),
+      Math.hypot(ox, worldH - oy),
+      Math.hypot(worldW - ox, worldH - oy)
+    ),
+    color,
+    active: true,
+  });
+  unlockedColors[color] = false;
+  bakeTiles();
+  let canvas = greySlice[color];
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.width = TILE_SIZE;
+    canvas.height = TILE_SIZE;
+    greySlice[color] = canvas;
   }
+  (canvas.getContext('2d') as CanvasRenderingContext2D).drawImage(tileCanvases[color], 0, 0);
+  unlockedColors[color] = true;
   bakeTiles();
 }
 
-/** Clip each live drain so that color's slice greys from portal toward the cap. */
+/** Clip each live drain so that color's slice greys from the plaza cap outward. */
 export function drawCutsceneDrain(
   ctx: CanvasRenderingContext2D,
   cameraX: number,
@@ -202,7 +191,7 @@ export function drawCutsceneDrain(
   lastTileX: number,
   lastTileY: number
 ): void {
-  if (phase !== PH_DRAIN) {
+  if (!onDone) {
     return;
   }
   for (const wave of drainWaves) {
@@ -242,8 +231,7 @@ export function drawCutsceneWorld(
     const gate = portals[i];
     ctx.drawImage(gate.canvas, Math.floor(gate.x - cameraX), Math.floor(gate.y - cameraY));
     for (const piece of pipeRuns[i]) {
-      const canvas = i < drained ? piece.canvas : greyPipeCanvas(piece.canvas);
-      ctx.drawImage(canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
+      ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
     }
   }
 
@@ -254,7 +242,11 @@ export function drawCutsceneWorld(
       Math.floor(plazaGate.y - cameraY)
     );
     if (finalBossSprites) {
-      ctx.drawImage(finalBossSprites[0], Math.floor(boss.x - cameraX), Math.floor(boss.y - cameraY));
+      ctx.drawImage(
+        finalBossSprites[0],
+        Math.floor(boss.x - cameraX),
+        Math.floor(boss.y - cameraY)
+      );
     }
   }
 }

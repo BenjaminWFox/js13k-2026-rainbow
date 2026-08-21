@@ -128,10 +128,12 @@ function hitOf(enemy: Enemy): {
 /** Bake one canvas + content hitbox per enemy type. Call once after the sheet loads. */
 export function bakeEnemyTypes(): void {
   for (let tier = 0; tier < TIER_SHEET_INDEX.length; tier++) {
-    const sheetX = 22 + TIER_SHEET_INDEX[tier] * 7;
-    const box = measureContentBox(sheetX, 0, 7, 9);
+    const sheetIndex = TIER_SHEET_INDEX[tier];
+    const sheetX = 22 + (sheetIndex % 4) * 7;
+    const sheetY = sheetIndex < 4 ? 0 : 9;
+    const box = measureContentBox(sheetX, sheetY, 7, 9);
     enemyTypes.push({
-      canvas: createSprite(sheetX, 0, 7, 9),
+      canvas: createSprite(sheetX, sheetY, 7, 9),
       hitX: box.x,
       hitY: box.y,
       hitW: box.w,

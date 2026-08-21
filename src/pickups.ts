@@ -83,8 +83,8 @@ export function resetPickups(): void {
 }
 
 export function bakePickups(): void {
-  crystalSprite = createSprite(78, 0, CRYSTAL_W, CRYSTAL_H);
-  scrapSprite = createSprite(82, 0, SCRAP_W, SCRAP_H);
+  crystalSprite = createSprite(40, 19, CRYSTAL_W, CRYSTAL_H);
+  scrapSprite = createSprite(44, 19, SCRAP_W, SCRAP_H);
 }
 
 /** Final-boss chunk: several independent rolls plus guaranteed scrap. */

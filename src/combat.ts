@@ -477,8 +477,8 @@ function updateBolts(dt: number): void {
 export function drawCombat(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number): void {
   if (hornBeat < 2) {
     if (!hornRight) {
-      hornRight = createSprite(88, 0, HORN_SW, HORN_SH);
-      hornLeft = createSprite(88, 0, HORN_SW, HORN_SH, true);
+      hornRight = createSprite(26, 29, HORN_SW, HORN_SH);
+      hornLeft = createSprite(26, 29, HORN_SW, HORN_SH, true);
     }
     ctx.drawImage(
       (hornDir > 0 ? hornRight : hornLeft) as HTMLCanvasElement,

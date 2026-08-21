@@ -1,5 +1,5 @@
 import { MAP_HEIGHT, MAP_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH, TILE_SIZE } from './constants';
-import { hubRadiusTiles, PORTAL_CELLS } from './map';
+import { getTile, hubRadiusTiles, PORTAL_CELLS, TILE_WALL, TILE_WHITE } from './map';
 import { BLUE, GREEN, ORANGE, RAINBOW_COLORS, VIOLET } from './palette';
 import { createSprite } from './sprites';
 
@@ -14,7 +14,7 @@ export interface PipePiece {
   canvas: HTMLCanvasElement;
   x: number;
   y: number;
-  /** Collision boxes. Straights/caps use the sprite; elbows use two 6×5 arms. */
+  /** Collision boxes. Straights/caps use the sprite AABB. */
   hits?: HitBox[];
 }
 
@@ -26,11 +26,13 @@ export let portalsGone = 0;
 function hidePipePortal(color: number): void {
   portalsGone |= 1 << color;
 }
-/** Pieces per pipe, portal → cap. Same objects as `pipePieces`. */
+/** Pieces per color (portal stub + plaza run). Same objects as `pipePieces`. */
 export const pipeRuns: PipePiece[][] = [];
 /** Remaining HP for the 7 edge portals. Plaza portal is not in this list. */
 export const portalHp: number[] = [];
 export const PORTAL_MAX_HP = 100;
+/** Plaza-side cap center per color — cutscene drain origin. */
+export const drainCaps: { x: number; y: number }[] = [];
 
 let slainPortal: { color: number; x: number; y: number } | null = null;
 
@@ -64,7 +66,7 @@ export function damagePortal(i: number, amount: number): boolean {
   return true;
 }
 
-/** Remove every segment of a pipe and hide its edge portal. */
+/** Remove every segment of a color (stub + debris) and hide its edge portal. */
 export function destroyPipe(color: number): void {
   hidePipePortal(color);
   const run = pipeRuns[color];
@@ -81,53 +83,39 @@ export function destroyPipe(color: number): void {
 
 let currentRun: PipePiece[] = [];
 
-export const DIR_E = 0;
-export const DIR_N = 1;
-export const DIR_W = 2;
-export const DIR_S = 3;
+const DIR_E = 0;
+const DIR_N = 1;
+const DIR_W = 2;
+const DIR_S = 3;
 
 const WORLD_W = MAP_WIDTH * TILE_SIZE;
 const WORLD_H = MAP_HEIGHT * TILE_SIZE;
 const CENTER_X = WORLD_W / 2;
 const CENTER_Y = WORLD_H / 2;
 
-// Atlas
-const CAP = { x: 22, y: 9, w: 5, h: 8 };
-const STRAIGHT = { x: 27, y: 9, w: 9, h: 6 };
-/** SE elbow — dark accent on outer (south/east) edges */
-const CURVE_OUTER = { x: 36, y: 9, w: 9, h: 9 };
-/** SE-shaped elbow — dark accent on inner edges */
-const CURVE_INNER = { x: 45, y: 9, w: 9, h: 9 };
-/** 12×23 monument. Same facing everywhere; pipe still leaves through the seam. */
+const CAP = { x: 12, y: 29, w: 5, h: 8 };
+const STRAIGHT = { x: 17, y: 29, w: 9, h: 6 };
 const PORTAL = { x: 0, y: 19, w: 12, h: 23 };
 const PORTAL_W = 12;
 const PORTAL_H = 23;
 const PIPE_H = 6;
 
 /** Horizontal straight end-to-end with 1px outline overlap. */
-export const ADVANCE = 8;
-// Cross-section center of metal port (rows/cols 1–4)
+const ADVANCE = 8;
 const PORT = 2.5;
+const STUB_STRAIGHTS = 3;
+const RUN_MIN = 3;
+const RUN_MAX = 6;
+/** Extra run just outside the hub so spawn camera sees capped pipes. */
+const PLAZA_RING = 24;
 
 /** Authored stripe / cap-dot on the sheet; remapped per pipe to a rainbow color. */
 const PIPE_STRIPE = 0xb1b1b1;
 
-interface CurveOrient {
-  canvas: HTMLCanvasElement;
-  /** Port center in local sprite pixels, keyed by DIR_* */
-  ports: Partial<Record<number, { x: number; y: number }>>;
-  /**
-   * Per-port accent flip: false = canonical (H bottom / V right),
-   * true = flipped (H top / V left). Straights on that axis must match.
-   */
-  portFlip: Partial<Record<number, boolean>>;
-}
-
 interface PipeKit {
-  straightH: HTMLCanvasElement[];
-  straightV: HTMLCanvasElement[];
-  curves: CurveOrient[];
-  caps: HTMLCanvasElement[][];
+  straightH: HTMLCanvasElement;
+  straightV: HTMLCanvasElement;
+  caps: HTMLCanvasElement[];
 }
 
 const kits: PipeKit[] = [];
@@ -137,49 +125,13 @@ const greyTwin = new Map<HTMLCanvasElement, HTMLCanvasElement>();
 
 let portalSprite: HTMLCanvasElement;
 
-// Active kit while assembling one colored run
-let straightH: HTMLCanvasElement[];
-let straightV: HTMLCanvasElement[];
-let curves: CurveOrient[];
-/** caps[dir][0|1] — long border against pipe; [1] = flipped accent */
-let caps: HTMLCanvasElement[][];
+let straightH: HTMLCanvasElement;
+let straightV: HTMLCanvasElement;
+/** caps[dir] — long border against the pipe. */
+let caps: HTMLCanvasElement[];
 
-export function opposite(dir: number): number {
+function opposite(dir: number): number {
   return (dir + 2) % 4;
-}
-
-export function isHorizontal(dir: number): boolean {
-  return dir === DIR_E || dir === DIR_W;
-}
-
-/** Flip then rot90 CCW a point from source (w×h) space into dest local space. */
-function mapPort(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  flipH: boolean,
-  flipV: boolean,
-  rot90: number
-): { x: number; y: number; w: number; h: number } {
-  if (flipH) {
-    x = w - 1 - x;
-  }
-  if (flipV) {
-    y = h - 1 - y;
-  }
-  let dw = w;
-  let dh = h;
-  for (let i = 0; i < rot90; i++) {
-    const nx = y;
-    const ny = dw - 1 - x;
-    x = nx;
-    y = ny;
-    const t = dw;
-    dw = dh;
-    dh = t;
-  }
-  return { x, y, w: dw, h: dh };
 }
 
 function pipeSprite(
@@ -189,91 +141,24 @@ function pipeSprite(
   rot90: number,
   color: number
 ): HTMLCanvasElement {
-  return createSprite(
-    atlas.x,
-    atlas.y,
-    atlas.w,
-    atlas.h,
-    flipH,
-    flipV,
-    rot90,
-    PIPE_STRIPE,
-    color
-  );
+  return createSprite(atlas.x, atlas.y, atlas.w, atlas.h, flipH, flipV, rot90, PIPE_STRIPE, color);
 }
 
 function bakeKit(color: number): PipeKit {
-  const straightH = [
-    pipeSprite(STRAIGHT, false, false, 0, color),
-    pipeSprite(STRAIGHT, false, true, 0, color),
-  ];
-  const straightV = [
-    pipeSprite(STRAIGHT, false, false, 1, color),
-    pipeSprite(STRAIGHT, false, true, 1, color),
-  ];
-
-  const baseS = { x: PORT, y: CURVE_OUTER.h - 1 };
-  const baseE = { x: CURVE_OUTER.w - 1, y: PORT };
-
-  const cornerDefs: {
-    atlas: { x: number; y: number; w: number; h: number };
-    flipH: boolean;
-    flipV: boolean;
-    portFlip: Partial<Record<number, boolean>>;
-  }[] = [
-    {
-      atlas: CURVE_OUTER,
-      flipH: false,
-      flipV: false,
-      portFlip: { [DIR_S]: false, [DIR_E]: false },
-    },
-    { atlas: CURVE_INNER, flipH: false, flipV: false, portFlip: { [DIR_S]: true, [DIR_E]: true } },
-    { atlas: CURVE_OUTER, flipH: false, flipV: true, portFlip: { [DIR_N]: false, [DIR_E]: true } },
-    { atlas: CURVE_INNER, flipH: false, flipV: true, portFlip: { [DIR_N]: true, [DIR_E]: false } },
-    { atlas: CURVE_OUTER, flipH: true, flipV: false, portFlip: { [DIR_S]: true, [DIR_W]: false } },
-    { atlas: CURVE_INNER, flipH: true, flipV: false, portFlip: { [DIR_S]: false, [DIR_W]: true } },
-    { atlas: CURVE_OUTER, flipH: true, flipV: true, portFlip: { [DIR_N]: true, [DIR_W]: true } },
-    { atlas: CURVE_INNER, flipH: true, flipV: true, portFlip: { [DIR_N]: false, [DIR_W]: false } },
-  ];
-
-  const curves = cornerDefs.map(({ atlas, flipH, flipV, portFlip }) => {
-    const canvas = pipeSprite(atlas, flipH, flipV, 0, color);
-    const s = mapPort(baseS.x, baseS.y, atlas.w, atlas.h, flipH, flipV, 0);
-    const e = mapPort(baseE.x, baseE.y, atlas.w, atlas.h, flipH, flipV, 0);
-    const ports: CurveOrient['ports'] = {};
-    if (!flipV) {
-      ports[DIR_S] = { x: s.x, y: s.y };
-    } else {
-      ports[DIR_N] = { x: s.x, y: s.y };
-    }
-    if (!flipH) {
-      ports[DIR_E] = { x: e.x, y: e.y };
-    } else {
-      ports[DIR_W] = { x: e.x, y: e.y };
-    }
-    return { canvas, ports, portFlip };
-  });
-
-  const caps: HTMLCanvasElement[][] = [];
-  caps[DIR_E] = [pipeSprite(CAP, true, false, 0, color), pipeSprite(CAP, true, true, 0, color)];
-  caps[DIR_W] = [pipeSprite(CAP, false, false, 0, color), pipeSprite(CAP, false, true, 0, color)];
-  caps[DIR_N] = [pipeSprite(CAP, true, false, 1, color), pipeSprite(CAP, true, true, 1, color)];
-  caps[DIR_S] = [pipeSprite(CAP, false, false, 1, color), pipeSprite(CAP, false, true, 1, color)];
-
-  return { straightH, straightV, curves, caps };
+  const kitCaps: HTMLCanvasElement[] = [];
+  kitCaps[DIR_E] = pipeSprite(CAP, true, false, 0, color);
+  kitCaps[DIR_W] = pipeSprite(CAP, false, false, 0, color);
+  kitCaps[DIR_N] = pipeSprite(CAP, true, false, 1, color);
+  kitCaps[DIR_S] = pipeSprite(CAP, false, false, 1, color);
+  return {
+    straightH: pipeSprite(STRAIGHT, false, false, 0, color),
+    straightV: pipeSprite(STRAIGHT, false, false, 1, color),
+    caps: kitCaps,
+  };
 }
 
-/** Every canvas in a kit, in a stable order shared by all kits. */
 function kitCanvasList(kit: PipeKit): HTMLCanvasElement[] {
-  return [
-    ...kit.straightH,
-    ...kit.straightV,
-    ...kit.curves.map((c) => c.canvas),
-    ...kit.caps[DIR_E],
-    ...kit.caps[DIR_N],
-    ...kit.caps[DIR_W],
-    ...kit.caps[DIR_S],
-  ];
+  return [kit.straightH, kit.straightV, ...kit.caps];
 }
 
 /** The colorless twin of a pipe canvas (cutscene pipes before they activate). */
@@ -286,10 +171,12 @@ function bakePieces(): void {
     for (let i = 0; i < 7; i++) {
       kits.push(bakeKit(RAINBOW_COLORS[i]));
     }
-    // Remapping the stripe to itself keeps it neutral grey: a colorless kit
     const greyList = kitCanvasList(bakeKit(PIPE_STRIPE));
     for (const kit of kits) {
-      kitCanvasList(kit).forEach((canvas, i) => greyTwin.set(canvas, greyList[i]));
+      const canvases = kitCanvasList(kit);
+      for (let i = 0; i < canvases.length; i++) {
+        greyTwin.set(canvases[i], greyList[i]);
+      }
     }
   }
   if (!portalSprite) {
@@ -301,91 +188,7 @@ function useKit(colorIndex: number): void {
   const kit = kits[colorIndex];
   straightH = kit.straightH;
   straightV = kit.straightV;
-  curves = kit.curves;
   caps = kit.caps;
-}
-
-/** Pick curve with the right ports whose enter-port accent matches `enterFlip`. */
-function findCurve(enterSide: number, exitSide: number, enterFlip: boolean): CurveOrient {
-  for (const c of curves) {
-    if (c.ports[enterSide] && c.ports[exitSide] && c.portFlip[enterSide] === enterFlip) {
-      return c;
-    }
-  }
-  return curves[0];
-}
-
-export function straightPreview(
-  cx: number,
-  cy: number,
-  dir: number
-): { x: number; y: number; w: number; h: number; nx: number; ny: number } {
-  if (dir === DIR_E) {
-    return { x: cx, y: cy - PORT, w: STRAIGHT.w, h: STRAIGHT.h, nx: cx + ADVANCE, ny: cy };
-  }
-  if (dir === DIR_W) {
-    return {
-      x: cx - ADVANCE,
-      y: cy - PORT,
-      w: STRAIGHT.w,
-      h: STRAIGHT.h,
-      nx: cx - ADVANCE,
-      ny: cy,
-    };
-  }
-  if (dir === DIR_S) {
-    return { x: cx - PORT, y: cy, w: STRAIGHT.h, h: STRAIGHT.w, nx: cx, ny: cy + ADVANCE };
-  }
-  return {
-    x: cx - PORT,
-    y: cy - ADVANCE,
-    w: STRAIGHT.h,
-    h: STRAIGHT.w,
-    nx: cx,
-    ny: cy - ADVANCE,
-  };
-}
-
-export function curvePreview(
-  cx: number,
-  cy: number,
-  dirIn: number,
-  dirOut: number,
-  hFlip: boolean,
-  vFlip: boolean
-): {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  nx: number;
-  ny: number;
-  hFlip: boolean;
-  vFlip: boolean;
-} | null {
-  const enterSide = opposite(dirIn);
-  const exitSide = dirOut;
-  const enterFlip = isHorizontal(dirIn) ? hFlip : vFlip;
-  const curve = findCurve(enterSide, exitSide, enterFlip);
-  const enter = curve.ports[enterSide];
-  const exit = curve.ports[exitSide];
-  if (!enter || !exit) {
-    return null;
-  }
-  const x = cx - enter.x;
-  const y = cy - enter.y;
-  const nextH = isHorizontal(dirOut) ? !!curve.portFlip[exitSide] : hFlip;
-  const nextV = isHorizontal(dirOut) ? vFlip : !!curve.portFlip[exitSide];
-  return {
-    x,
-    y,
-    w: CURVE_OUTER.w,
-    h: CURVE_OUTER.h,
-    nx: x + exit.x,
-    ny: y + exit.y,
-    hFlip: nextH,
-    vFlip: nextV,
-  };
 }
 
 function addPipePiece(canvas: HTMLCanvasElement, x: number, y: number, hits?: HitBox[]): void {
@@ -399,229 +202,191 @@ function addPipePiece(canvas: HTMLCanvasElement, x: number, y: number, hits?: Hi
   currentRun.push(piece);
 }
 
-/** Two 6×5 arms: 6px face matches the adjoining straight, 5px into the elbow. */
-function curveArmHits(x: number, y: number, curve: CurveOrient): HitBox[] {
-  const arm = 5;
-  const hits: HitBox[] = [];
-  const east = curve.ports[DIR_E];
-  if (east) {
-    hits.push({ x: x + CURVE_OUTER.w - arm, y: y + east.y - PORT, w: arm, h: PIPE_H });
+function straightStep(
+  cx: number,
+  cy: number,
+  dir: number
+): { x: number; y: number; canvas: HTMLCanvasElement; nx: number; ny: number } {
+  if (dir === DIR_E) {
+    return { x: cx, y: cy - PORT, canvas: straightH, nx: cx + ADVANCE, ny: cy };
   }
-  const west = curve.ports[DIR_W];
-  if (west) {
-    hits.push({ x, y: y + west.y - PORT, w: arm, h: PIPE_H });
+  if (dir === DIR_W) {
+    return { x: cx - ADVANCE, y: cy - PORT, canvas: straightH, nx: cx - ADVANCE, ny: cy };
   }
-  const south = curve.ports[DIR_S];
-  if (south) {
-    hits.push({ x: x + south.x - PORT, y: y + CURVE_OUTER.h - arm, w: PIPE_H, h: arm });
+  if (dir === DIR_S) {
+    return { x: cx - PORT, y: cy, canvas: straightV, nx: cx, ny: cy + ADVANCE };
   }
-  const north = curve.ports[DIR_N];
-  if (north) {
-    hits.push({ x: x + north.x - PORT, y, w: PIPE_H, h: arm });
-  }
-  return hits;
+  return { x: cx - PORT, y: cy - ADVANCE, canvas: straightV, nx: cx, ny: cy - ADVANCE };
 }
 
-export function pushStraight(
+function capPos(cx: number, cy: number, dir: number): { x: number; y: number } {
+  if (dir === DIR_E) {
+    return { x: cx - 1, y: cy - PORT - 1 };
+  }
+  if (dir === DIR_W) {
+    return { x: cx - 3, y: cy - PORT - 1 };
+  }
+  if (dir === DIR_N) {
+    return { x: cx - PORT - 1, y: cy - 3 };
+  }
+  return { x: cx - PORT - 1, y: cy - 1 };
+}
+
+/** Opposite-facing cap behind the first straight (1px join, not buried under it). */
+function backCapPos(cx: number, cy: number, dir: number): { x: number; y: number } {
+  if (dir === DIR_E) {
+    return { x: cx - 4, y: cy - PORT - 1 };
+  }
+  if (dir === DIR_W) {
+    return { x: cx - 1, y: cy - PORT - 1 };
+  }
+  if (dir === DIR_S) {
+    return { x: cx - PORT - 1, y: cy - 4 };
+  }
+  return { x: cx - PORT - 1, y: cy - 1 };
+}
+
+function pushStraight(cx: number, cy: number, dir: number): { cx: number; cy: number } {
+  const step = straightStep(cx, cy, dir);
+  addPipePiece(step.canvas, step.x, step.y);
+  return { cx: step.nx, cy: step.ny };
+}
+
+function pushCap(cx: number, cy: number, dir: number): void {
+  const pos = capPos(cx, cy, dir);
+  addPipePiece(caps[dir], pos.x, pos.y);
+}
+
+function overlaps(a: HitBox, b: HitBox, pad = 0): boolean {
+  return (
+    a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y
+  );
+}
+
+function boxHitsPipes(box: HitBox, pad = 1): boolean {
+  for (const piece of pipePieces) {
+    for (const hit of piece.hits ?? []) {
+      if (overlaps(box, hit, pad)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function boxOnBadTile(box: HitBox, color: number, strictSlice = true): boolean {
+  const x0 = Math.floor(box.x / TILE_SIZE);
+  const y0 = Math.floor(box.y / TILE_SIZE);
+  const x1 = Math.floor((box.x + box.w - 0.001) / TILE_SIZE);
+  const y1 = Math.floor((box.y + box.h - 0.001) / TILE_SIZE);
+  for (let ty = y0; ty <= y1; ty++) {
+    for (let tx = x0; tx <= x1; tx++) {
+      const tile = getTile(tx, ty);
+      if (tile === TILE_WALL || tile === TILE_WHITE || (strictSlice && tile !== color)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function runBoxes(
   cx: number,
   cy: number,
   dir: number,
-  hFlip: boolean,
-  vFlip: boolean
-): { cx: number; cy: number } {
-  const flip = isHorizontal(dir) ? hFlip : vFlip;
-  if (dir === DIR_E) {
-    addPipePiece(straightH[flip ? 1 : 0], cx, cy - PORT);
-    return { cx: cx + ADVANCE, cy };
+  count: number,
+  cappedStart: boolean
+): HitBox[] {
+  const boxes: HitBox[] = [];
+  if (cappedStart) {
+    const back = caps[opposite(dir)];
+    const pos = backCapPos(cx, cy, dir);
+    boxes.push({ x: pos.x, y: pos.y, w: back.width, h: back.height });
   }
-  if (dir === DIR_W) {
-    addPipePiece(straightH[flip ? 1 : 0], cx - ADVANCE, cy - PORT);
-    return { cx: cx - ADVANCE, cy };
+  let x = cx;
+  let y = cy;
+  for (let i = 0; i < count; i++) {
+    const step = straightStep(x, y, dir);
+    boxes.push({ x: step.x, y: step.y, w: step.canvas.width, h: step.canvas.height });
+    x = step.nx;
+    y = step.ny;
   }
-  if (dir === DIR_S) {
-    addPipePiece(straightV[flip ? 1 : 0], cx - PORT, cy);
-    return { cx, cy: cy + ADVANCE };
-  }
-  addPipePiece(straightV[flip ? 1 : 0], cx - PORT, cy - ADVANCE);
-  return { cx, cy: cy - ADVANCE };
+  const head = caps[dir];
+  const pos = capPos(x, y, dir);
+  boxes.push({ x: pos.x, y: pos.y, w: head.width, h: head.height });
+  return boxes;
 }
 
-export function pushCurve(
+function pushRun(cx: number, cy: number, dir: number, count: number, cappedStart: boolean): void {
+  let x = cx;
+  let y = cy;
+  for (let i = 0; i < count; i++) {
+    const next = pushStraight(x, y, dir);
+    x = next.cx;
+    y = next.cy;
+  }
+  if (cappedStart) {
+    const pos = backCapPos(cx, cy, dir);
+    addPipePiece(caps[opposite(dir)], pos.x, pos.y);
+  }
+  pushCap(x, y, dir);
+}
+
+function tryPlaceDebris(
+  color: number,
   cx: number,
   cy: number,
-  dirIn: number,
-  dirOut: number,
-  hFlip: boolean,
-  vFlip: boolean
-): { cx: number; cy: number; hFlip: boolean; vFlip: boolean } {
-  const enterSide = opposite(dirIn);
-  const exitSide = dirOut;
-  const enterFlip = isHorizontal(dirIn) ? hFlip : vFlip;
-  const curve = findCurve(enterSide, exitSide, enterFlip);
-  const enter = curve.ports[enterSide];
-  const exit = curve.ports[exitSide];
-  if (!enter || !exit) {
-    return { cx, cy, hFlip, vFlip };
+  dir: number,
+  count: number,
+  pad: number,
+  strictSlice = true
+): boolean {
+  const boxes = runBoxes(cx, cy, dir, count, true);
+  for (const box of boxes) {
+    if (boxOnBadTile(box, color, strictSlice) || boxHitsPipes(box, pad)) {
+      return false;
+    }
   }
-  const x = cx - enter.x;
-  const y = cy - enter.y;
-  addPipePiece(curve.canvas, x, y, curveArmHits(x, y, curve));
-
-  const exitFlip = !!curve.portFlip[exitSide];
-  if (isHorizontal(dirOut)) {
-    hFlip = exitFlip;
-  } else {
-    vFlip = exitFlip;
-  }
-  return { cx: x + exit.x, cy: y + exit.y, hFlip, vFlip };
+  useKit(color);
+  currentRun = pipeRuns[color];
+  pushRun(cx, cy, dir, count, true);
+  return true;
 }
 
-export function pushCap(cx: number, cy: number, dir: number, hFlip: boolean, vFlip: boolean): void {
-  const flip = isHorizontal(dir) ? hFlip : vFlip;
-  const canvas = caps[dir][flip ? 1 : 0];
-  // Long border faces the pipe; 1px overlap into the run.
-  if (dir === DIR_E) {
-    addPipePiece(canvas, cx - 1, cy - PORT - 1);
-  } else if (dir === DIR_W) {
-    addPipePiece(canvas, cx - 3, cy - PORT - 1);
-  } else if (dir === DIR_N) {
-    addPipePiece(canvas, cx - PORT - 1, cy - 3);
-  } else {
-    addPipePiece(canvas, cx - PORT - 1, cy - 1);
+function placePlazaRun(): void {
+  for (let i = 0; i < 7; i++) {
+    const [gx, gy] = PORTAL_CELLS[i];
+    const ang = Math.atan2((gy + 0.5) * SLOT - CENTER_Y, (gx + 0.5) * SLOT - CENTER_X);
+    const dir = opposite(inwardDir(gx, gy));
+    let placed = false;
+    for (const extra of [PLAZA_RING, PLAZA_RING + 12, PLAZA_RING + 24, PLAZA_RING + 36]) {
+      if (placed) {
+        break;
+      }
+      const r = hubRadiusTiles(ang) * TILE_SIZE + extra;
+      const x = CENTER_X + Math.cos(ang) * r;
+      const y = CENTER_Y + Math.sin(ang) * r;
+      if (getTile(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)) !== i) {
+        continue;
+      }
+      for (let n = RUN_MAX; n >= RUN_MIN; n--) {
+        if (tryPlaceDebris(i, x, y, dir, n, 4, false)) {
+          const pos = backCapPos(x, y, dir);
+          const cap = caps[opposite(dir)];
+          drainCaps[i] = { x: pos.x + cap.width / 2, y: pos.y + cap.height / 2 };
+          placed = true;
+          break;
+        }
+      }
+    }
   }
-}
-
-function pushPortal(portalX: number, portalY: number): void {
-  portals.push({ canvas: portalSprite, x: portalX, y: portalY });
 }
 
 const SLOT = WORLD_W / 10;
 const INSET = 75;
-/** Portal Y so the pipe through the seam sits on `CENTER_Y`. */
 const PORTAL_PIPE_OFF_Y = PORTAL_H - 1 - PIPE_H + PORT;
 
-const MODE_STRAIGHT = 0;
-const MODE_STRAIGHT_PORTAL_CURVE = 1;
-const MODE_DIAGONAL = 2;
-
-function pipeMode(color: number): number {
-  if (color === GREEN || color === BLUE) {
-    return MODE_STRAIGHT;
-  }
-  if (color === ORANGE || color === VIOLET) {
-    return MODE_STRAIGHT_PORTAL_CURVE;
-  }
-  return MODE_DIAGONAL;
-}
-
-function alongRemaining(cx: number, cy: number, dir: number, tx: number, ty: number): number {
-  if (dir === DIR_E) {
-    return tx - cx;
-  }
-  if (dir === DIR_W) {
-    return cx - tx;
-  }
-  if (dir === DIR_S) {
-    return ty - cy;
-  }
-  return cy - ty;
-}
-
-function walkStraight(
-  cx: number,
-  cy: number,
-  dir: number,
-  hFlip: boolean,
-  vFlip: boolean,
-  targetX: number,
-  targetY: number
-): { cx: number; cy: number } {
-  let steps = 0;
-  while (steps++ < 400 && alongRemaining(cx, cy, dir, targetX, targetY) > ADVANCE) {
-    const next = pushStraight(cx, cy, dir, hFlip, vFlip);
-    cx = next.cx;
-    cy = next.cy;
-  }
-  return { cx, cy };
-}
-
-/**
- * Competition layout: cardinals are a single heading (verticals elbow once
- * out of the east/west-facing portal); diagonals alternate straight / curve.
- * The occupancy-grid snake lives in `src/directors-cut/pipe-snake.ts`.
- */
-function buildPipeSimple(
-  color: number,
-  startX: number,
-  startY: number,
-  startDir: number,
-  targetX: number,
-  targetY: number
-): void {
-  const mode = pipeMode(color);
-  let cx = startX;
-  let cy = startY;
-  let dir = startDir;
-  let hFlip = false;
-  let vFlip = false;
-
-  if (mode === MODE_STRAIGHT_PORTAL_CURVE) {
-    const runDir = color === ORANGE ? DIR_S : DIR_N;
-    const turned = pushCurve(cx, cy, dir, runDir, hFlip, vFlip);
-    cx = turned.cx;
-    cy = turned.cy;
-    hFlip = turned.hFlip;
-    vFlip = turned.vFlip;
-    dir = runDir;
-  }
-
-  if (mode !== MODE_DIAGONAL) {
-    const end = walkStraight(cx, cy, dir, hFlip, vFlip, targetX, targetY);
-    pushCap(end.cx, end.cy, dir, hFlip, vFlip);
-    return;
-  }
-
-  let steps = 0;
-  while (steps++ < 400) {
-    if (Math.abs(targetX - cx) <= ADVANCE && Math.abs(targetY - cy) <= ADVANCE) {
-      break;
-    }
-    if (alongRemaining(cx, cy, dir, targetX, targetY) > ADVANCE) {
-      const next = pushStraight(cx, cy, dir, hFlip, vFlip);
-      cx = next.cx;
-      cy = next.cy;
-    }
-    if (Math.abs(targetX - cx) <= ADVANCE && Math.abs(targetY - cy) <= ADVANCE) {
-      break;
-    }
-    const turnTo = isHorizontal(dir)
-      ? targetY > cy
-        ? DIR_S
-        : DIR_N
-      : targetX > cx
-        ? DIR_E
-        : DIR_W;
-    const cross = isHorizontal(dir) ? Math.abs(targetY - cy) : Math.abs(targetX - cx);
-    if (cross <= ADVANCE || (turnTo + dir) % 2 !== 1) {
-      const end = walkStraight(cx, cy, dir, hFlip, vFlip, targetX, targetY);
-      cx = end.cx;
-      cy = end.cy;
-      break;
-    }
-    const next = pushCurve(cx, cy, dir, turnTo, hFlip, vFlip);
-    cx = next.cx;
-    cy = next.cy;
-    hFlip = next.hFlip;
-    vFlip = next.vFlip;
-    dir = turnTo;
-  }
-  pushCap(cx, cy, dir, hFlip, vFlip);
-}
-
-function portalFromCell(
-  gx: number,
-  gy: number
-): { portalX: number; portalY: number; emergeEast: boolean } {
+function portalFromCell(gx: number, gy: number): { portalX: number; portalY: number } {
   const cellX = (gx + 0.5) * SLOT;
   const cellY = (gy + 0.5) * SLOT;
   const yMin = TILE_SIZE + 4;
@@ -633,64 +398,87 @@ function portalFromCell(
     return {
       portalX: INSET,
       portalY: Math.max(yMin, Math.min(yMax, cellY - PORTAL_H / 2)),
-      emergeEast: true,
     };
   }
   if (gx === 9) {
     return {
       portalX: WORLD_W - PORTAL_W - INSET,
       portalY: Math.max(yMin, Math.min(yMax, cellY - PORTAL_H / 2)),
-      emergeEast: false,
     };
   }
   if (gy === 0) {
     return {
       portalX: Math.max(xMin, Math.min(xMax, cellX - PORTAL_W / 2)),
       portalY: INSET,
-      emergeEast: cellX < CENTER_X,
     };
   }
   return {
     portalX: Math.max(xMin, Math.min(xMax, cellX - PORTAL_W / 2)),
     portalY: WORLD_H - PORTAL_H - INSET,
-    emergeEast: cellX < CENTER_X,
   };
 }
 
-function placePortal(
-  color: number,
-  gx: number,
-  gy: number
-): { portalX: number; portalY: number; emergeEast: boolean } {
+function placePortal(color: number, gx: number, gy: number): { portalX: number; portalY: number } {
   if (color === GREEN) {
-    return { portalX: INSET, portalY: CENTER_Y - PORTAL_PIPE_OFF_Y, emergeEast: true };
+    return { portalX: INSET, portalY: CENTER_Y - PORTAL_PIPE_OFF_Y };
   }
   if (color === BLUE) {
     return {
       portalX: WORLD_W - PORTAL_W - INSET,
       portalY: CENTER_Y - PORTAL_PIPE_OFF_Y,
-      emergeEast: false,
     };
   }
   if (color === ORANGE) {
-    return { portalX: CENTER_X - PORTAL_W / 2, portalY: INSET, emergeEast: true };
+    return { portalX: CENTER_X - PORTAL_W / 2, portalY: INSET };
   }
   if (color === VIOLET) {
     return {
       portalX: CENTER_X - PORTAL_W / 2,
       portalY: WORLD_H - PORTAL_H - INSET,
-      emergeEast: true,
     };
   }
   return portalFromCell(gx, gy);
 }
 
+/** Inward heading from that edge. Corners on a west/east wall go horizontal. */
+function inwardDir(gx: number, gy: number): number {
+  if (gx === 0) {
+    return DIR_E;
+  }
+  if (gx === 9) {
+    return DIR_W;
+  }
+  if (gy === 0) {
+    return DIR_S;
+  }
+  return DIR_N;
+}
+
+function stubStart(portalX: number, portalY: number, dir: number): { x: number; y: number } {
+  const seamX = portalX + PORTAL_W / 2;
+  const seamY = portalY + PORTAL_H - 1 - PIPE_H + PORT;
+  if (dir === DIR_E) {
+    return { x: seamX - 2, y: seamY };
+  }
+  if (dir === DIR_W) {
+    return { x: seamX + 2, y: seamY };
+  }
+  if (dir === DIR_S) {
+    return { x: seamX, y: portalY + PORTAL_H - 1 };
+  }
+  return { x: seamX, y: portalY + 1 };
+}
+
+function pushPortal(portalX: number, portalY: number): void {
+  portals.push({ canvas: portalSprite, x: portalX, y: portalY });
+}
+
 /**
- * Place 7 portals and grow a pipe from each toward a cap just outside the
- * white hub. Competition build uses straight / diagonal layouts.
+ * Place 7 portals, a 3-straight inward stub from each, and one capped run
+ * (3–6 straights) just off the plaza per color.
  *
- * Director's cut: swap `buildPipeSimple` for `buildPipeSnake` from
- * `src/directors-cut/pipe-snake.ts` (see SPEC.md §1 Director's Cut).
+ * Director's cut: the occupancy-grid snake lived in
+ * `src/directors-cut/pipe-snake.ts` (needs the old curve kit to restore).
  */
 export function generatePipes(): void {
   pipePieces.length = 0;
@@ -698,33 +486,24 @@ export function generatePipes(): void {
   portalsGone = 0;
   pipeRuns.length = 0;
   portalHp.length = 0;
+  drainCaps.length = 0;
   slainPortal = null;
   bakePieces();
 
   for (let i = 0; i < 7; i++) {
     const [gx, gy] = PORTAL_CELLS[i];
-    const { portalX, portalY, emergeEast } = placePortal(i, gx, gy);
-
-    const seamX = portalX + PORTAL_W / 2;
-    const cy = portalY + PORTAL_H - 1 - PIPE_H + PORT;
-    const dir = emergeEast ? DIR_E : DIR_W;
-    const startX = emergeEast ? seamX - 2 : seamX + 2;
-
-    const dx = startX - CENTER_X;
-    const dy = cy - CENTER_Y;
-    const len = Math.hypot(dx, dy) || 1;
-    const ang = Math.atan2(dy, dx);
-    const capDist = (hubRadiusTiles(ang) + 1) * TILE_SIZE;
-    const targetX = CENTER_X + (dx / len) * capDist;
-    const targetY = CENTER_Y + (dy / len) * capDist;
+    const { portalX, portalY } = placePortal(i, gx, gy);
+    const dir = inwardDir(gx, gy);
+    const start = stubStart(portalX, portalY, dir);
 
     pushPortal(portalX, portalY);
     useKit(i);
     currentRun = [];
     pipeRuns.push(currentRun);
     portalHp.push(PORTAL_MAX_HP);
-    buildPipeSimple(i, startX, cy, dir, targetX, targetY);
+    pushRun(start.x, start.y, dir, STUB_STRAIGHTS, false);
   }
+  placePlazaRun();
 }
 
 /**
@@ -749,4 +528,3 @@ export function spawnPlazaPortal(): { x: number; y: number } {
     y: piece.y + PORTAL_H - PLAYER_HEIGHT,
   };
 }
-

@@ -35,16 +35,17 @@ const props: DebugProp[] = [];
 const ATLAS: { x: number; y: number; w: number; h: number }[] = [
   { x: 11, y: 0, w: 11, h: 19 }, // Business Boss
   { x: 0, y: 19, w: 12, h: 23 }, // Portal
-  // Common enemies 7x9 from (22,0)
-  ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ x: 22 + i * 7, y: 0, w: 7, h: 9 })),
-  // Pipes from (22,9)
-  { x: 22, y: 9, w: 5, h: 8 }, // cap
-  { x: 27, y: 9, w: 9, h: 6 }, // straight
-  { x: 36, y: 9, w: 9, h: 9 }, // curve outer accent (SE)
-  { x: 45, y: 9, w: 9, h: 9 }, // curve inner accent (→ NW)
-  // Flowers 7x10 from (57,9)
-  ...[0, 1, 2, 3].map((i) => ({ x: 57 + i * 7, y: 9, w: 7, h: 10 })),
-  { x: 88, y: 0, w: 17, h: 9 }, // unicorn horn
+  // Common enemies: 4 across at y=0, 4 across at y=9
+  ...[0, 1, 2, 3].map((i) => ({ x: 22 + i * 7, y: 0, w: 7, h: 9 })),
+  ...[0, 1, 2, 3].map((i) => ({ x: 22 + i * 7, y: 9, w: 7, h: 9 })),
+  // Flowers, crystal, scrap — right of portal
+  ...[0, 1, 2, 3].map((i) => ({ x: 12 + i * 7, y: 19, w: 7, h: 10 })),
+  { x: 40, y: 19, w: 4, h: 6 }, // crystal
+  { x: 44, y: 19, w: 6, h: 6 }, // scrap
+  // Cap, straight, horn — below flowers
+  { x: 12, y: 29, w: 5, h: 8 }, // cap
+  { x: 17, y: 29, w: 9, h: 6 }, // straight
+  { x: 26, y: 29, w: 17, h: 9 }, // unicorn horn
 ];
 
 function mulberry32(seed: number): () => number {
