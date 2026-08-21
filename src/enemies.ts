@@ -200,55 +200,60 @@ export function resetEnemies(): void {
   spawnMinibosses();
 }
 
-function spawnMinibosses(): void {
-  for (let i = 0; i < pipeHomes.length; i++) {
-    const home = pipeHomes[i];
-    enemies.push({
-      x: home.x,
-      y: home.y,
-      type: 0,
-      hp: 100,
-      kbX: 0,
-      kbY: 0,
-      bobTime: 0,
-      contactTimer: 0,
-      frozen: 0,
-      slowed: 0,
-      boss: true,
-      color: i,
-      maxHp: 100,
-      homeX: home.x,
-      homeY: home.y,
-      cd: 0,
-      boost: 0,
-      chasing: false,
-      moving: false,
-    });
-  }
-}
-
-export function spawnFinalBoss(x: number, y: number): void {
-  enemies.push({
+function makeEnemy(
+  x: number,
+  y: number,
+  hp: number,
+  extra: Partial<Enemy>
+): Enemy {
+  return {
     x,
     y,
     type: 0,
-    hp: FINAL_HP,
+    hp,
     kbX: 0,
     kbY: 0,
     bobTime: 0,
     contactTimer: 0,
     frozen: 0,
     slowed: 0,
-    boss: true,
-    color: FINAL_BOSS,
-    maxHp: FINAL_HP,
-    homeX: x,
-    homeY: y,
+    boss: false,
+    color: -1,
+    maxHp: hp,
+    homeX: 0,
+    homeY: 0,
     cd: 0,
     boost: 0,
-    chasing: true,
+    chasing: false,
     moving: false,
-  });
+    ...extra,
+  };
+}
+
+function spawnMinibosses(): void {
+  for (let i = 0; i < pipeHomes.length; i++) {
+    const home = pipeHomes[i];
+    enemies.push(
+      makeEnemy(home.x, home.y, 100, {
+        boss: true,
+        color: i,
+        homeX: home.x,
+        homeY: home.y,
+      })
+    );
+  }
+}
+
+export function spawnFinalBoss(x: number, y: number): void {
+  enemies.push(
+    makeEnemy(x, y, FINAL_HP, {
+      boss: true,
+      color: FINAL_BOSS,
+      homeX: x,
+      homeY: y,
+      chasing: true,
+    })
+  );
 }
 
 export function updateEnemies(dt: number, viewWidth: number, viewHeight: number): void {
@@ -413,27 +418,12 @@ function trySpawn(playerCenterX: number, playerCenterY: number, radius: number):
   const type = enemyTypes[tier];
   const spot = findSpawnSpot(type, playerCenterX, playerCenterY, radius);
   if (spot) {
-    enemies.push({
-      x: spot.x,
-      y: spot.y,
-      type: tier,
-      hp: type.hp,
-      kbX: 0,
-      kbY: 0,
-      bobTime: Math.random() * BOB_PERIOD_MS,
-      contactTimer: 0,
-      frozen: 0,
-      slowed: 0,
-      boss: false,
-      color: -1,
-      maxHp: type.hp,
-      homeX: 0,
-      homeY: 0,
-      cd: 0,
-      boost: 0,
-      chasing: false,
-      moving: false,
-    });
+    enemies.push(
+      makeEnemy(spot.x, spot.y, type.hp, {
+        type: tier,
+        bobTime: Math.random() * BOB_PERIOD_MS,
+      })
+    );
   }
 }
 
@@ -684,29 +674,24 @@ export function hurtEnemyAt(index: number, amount: number): boolean {
   if (enemy.hp > 0) {
     return false;
   }
-  if (enemy.color === FINAL_BOSS) {
-    spawnExplosion(cx, cy, 0x000000, 22);
-    spawnExplosion(cx, cy, 0xffffff, 14);
+  if (enemy.boss) {
     dropBossLoot(cx, cy);
-    slainFinalBoss = true;
+    if (enemy.color === FINAL_BOSS) {
+      spawnExplosion(cx, cy, 0x000000, 22);
+      spawnExplosion(cx, cy, 0xffffff, 14);
+      slainFinalBoss = true;
+    } else {
+      spawnExplosion(cx, cy, RAINBOW_COLORS[enemy.color], 18);
+      slainMiniboss = { color: enemy.color, x: cx, y: cy };
+    }
     enemies.splice(index, 1);
     return true;
   }
-  if (enemy.color >= 0) {
-    spawnExplosion(cx, cy, RAINBOW_COLORS[enemy.color], 18);
-    dropBossLoot(cx, cy);
-    slainMiniboss = { color: enemy.color, x: cx, y: cy };
-    enemies.splice(index, 1);
-    return true;
-  }
-  killRegularAt(index);
+  killRegularAt(index, cx, cy);
   return true;
 }
 
-function killRegularAt(index: number): void {
-  const box = enemyHitbox(enemies[index]);
-  const cx = box.x + box.w / 2;
-  const cy = box.y + box.h / 2;
+function killRegularAt(index: number, cx: number, cy: number): void {
   spawnExplosion(cx, cy, 0xb1b1b1, 12);
   dropLoot(cx, cy);
   enemies.splice(index, 1);
@@ -732,7 +717,7 @@ export function killOnScreenRegulars(
     ) {
       continue;
     }
-    killRegularAt(i);
+    killRegularAt(i, box.x + box.w / 2, box.y + box.h / 2);
   }
 }
 

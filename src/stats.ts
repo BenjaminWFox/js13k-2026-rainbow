@@ -15,7 +15,6 @@ export const SHOP_ROWS = 4;
 // Per-rank amounts are TBD; placeholders until the tuning phase.
 export const STR_PER_RANK = 0.2;
 export const CON_HP_PER_RANK = 20;
-export const WIS_PER_RANK = 0.2;
 /** Yellow nova burst: added to move speed while the boost timer is up. */
 export const SPEED_PER_RANK = 0.15;
 export const START_HP_PER_RANK = 15;
@@ -51,7 +50,7 @@ export interface DraftCard {
 }
 
 export function totalStat(id: number): number {
-  return Math.min(STAT_CAP, inRunStats[id]);
+  return inRunStats[id];
 }
 
 export function shopPrice(row: number): number {
@@ -66,13 +65,8 @@ export function shopLine(row: number): string {
   return SHOP_NAME[row] + '  ' + rank + '/3  ' + shopPrice(row);
 }
 
-export function hornPwr(): number {
-  return 1 + STR_PER_RANK * totalStat(STAT_STR);
-}
-
-/** WIS scales nova damage, heal, freeze, and the yellow speed burst. */
-export function novaPwr(): number {
-  return 1 + WIS_PER_RANK * totalStat(STAT_WIS);
+export function pwr(id: number): number {
+  return 1 + STR_PER_RANK * totalStat(id);
 }
 
 /** Shop Start Speed is always-on; yellow nova burst stacks while `boost` > 0. */
@@ -80,7 +74,7 @@ export function speedMul(boost = 0): number {
   return (
     1 +
     START_SPD_PER_RANK * shopRanks[SHOP_START_SPD] +
-    (boost > 0 ? SPEED_PER_RANK * novaPwr() : 0)
+    (boost > 0 ? SPEED_PER_RANK * pwr(STAT_WIS) : 0)
   );
 }
 

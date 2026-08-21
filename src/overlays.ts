@@ -59,7 +59,7 @@ let seq: {
 } | null = null;
 let finaleStarted = false;
 
-export const colorWave = { active: false, x: 0, y: 0, r: 0, maxR: 0 };
+export const colorWave = { active: false, x: 0, y: 0, r: 0 };
 
 /** Later overlays (pipe-unlock, death, win) push here so they never overlap. */
 const overlayQueue: (() => void)[] = [];
@@ -117,14 +117,9 @@ function quitToTitle(): void {
   openTitle();
 }
 
-function openDeath(): void {
+function openEnd(title: string): void {
   saveGame();
-  openMenu('YOU DIED', ['CONTINUE'], () => openShop(false));
-}
-
-function openWin(): void {
-  saveGame();
-  openMenu('YOU WIN', ['CONTINUE'], () => openShop(false));
+  openMenu(title, ['CONTINUE'], () => openShop(false));
 }
 
 function openShop(fromTitle: boolean): void {
@@ -213,12 +208,11 @@ function beginWave(color: number, x: number, y: number): void {
   }
 }
 
-function startWave(x: number, y: number, maxR = 0): void {
+function startWave(x: number, y: number): void {
   colorWave.active = true;
   colorWave.x = x;
   colorWave.y = y;
   colorWave.r = 0;
-  colorWave.maxR = maxR;
 }
 
 /** Advance the recolor/drain clip. Returns true on the frame it finishes. */
@@ -229,14 +223,12 @@ export function tickColorWave(dt: number): boolean {
   colorWave.r += WAVE_SPEED * dt;
   const worldW = MAP_WIDTH * TILE_SIZE;
   const worldH = MAP_HEIGHT * TILE_SIZE;
-  const maxR =
-    colorWave.maxR ||
-    Math.max(
-      Math.hypot(colorWave.x, colorWave.y),
-      Math.hypot(worldW - colorWave.x, colorWave.y),
-      Math.hypot(colorWave.x, worldH - colorWave.y),
-      Math.hypot(worldW - colorWave.x, worldH - colorWave.y)
-    );
+  const maxR = Math.max(
+    Math.hypot(colorWave.x, colorWave.y),
+    Math.hypot(worldW - colorWave.x, colorWave.y),
+    Math.hypot(colorWave.x, worldH - colorWave.y),
+    Math.hypot(worldW - colorWave.x, worldH - colorWave.y)
+  );
   if (colorWave.r >= maxR) {
     colorWave.active = false;
     return true;
@@ -300,7 +292,7 @@ export function resetRun(): void {
   colorWave.active = false;
   resetRunStats();
   resetPlayer();
-  generatePipes(1);
+  generatePipes();
   resetEnemies();
   resetPickups();
   resetExplosions();
@@ -377,11 +369,11 @@ export function updateOverlays(viewWidth: number, viewHeight: number): void {
     updateUi(viewWidth, viewHeight);
   }
   if (takeSlainFinalBoss()) {
-    enqueueOverlay(openWin);
+    enqueueOverlay(() => openEnd('YOU WIN'));
   }
   if (scene === SCENE_RUN && !isUiOpen() && !seq && player.hp <= 0 && overlayQueue.length === 0) {
     if (!tryRevive()) {
-      openDeath();
+      openEnd('YOU DIED');
     }
   }
   pumpOverlays();

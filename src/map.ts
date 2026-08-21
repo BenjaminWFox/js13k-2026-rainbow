@@ -146,7 +146,7 @@ export function bakeTiles(): void {
     if (tile === TILE_WALL) {
       paintWall(ctx);
     } else if (tile === TILE_WHITE) {
-      paintGround(ctx, '#ffffff', cssColor(0xcecece));
+      paintGround(ctx, '#ffffff', '#cecece');
     } else {
       paintGround(ctx, cssColor(rainbowShade(tile, 0.8)), cssColor(RAINBOW_COLORS[tile]));
     }
@@ -164,9 +164,9 @@ function paintGround(ctx: CanvasRenderingContext2D, fill: string, highlight: str
 }
 
 function paintWall(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = cssColor(0x747474);
+  ctx.fillStyle = '#747474';
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-  ctx.fillStyle = cssColor(0xcecece);
+  ctx.fillStyle = '#cecece';
   const inset = 2;
   ctx.fillRect(inset, inset, TILE_SIZE - inset * 2, TILE_SIZE - inset * 2);
 }

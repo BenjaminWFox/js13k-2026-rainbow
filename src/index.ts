@@ -3,10 +3,6 @@ import {
   MAP_HEIGHT,
   MAP_WIDTH,
   PLAYER_HEIGHT,
-  PLAYER_SPRITE_H,
-  PLAYER_SPRITE_W,
-  PLAYER_SPRITE_X,
-  PLAYER_SPRITE_Y,
   PLAYER_WIDTH,
   TARGET_VIEW_HEIGHT,
   TILE_SIZE,
@@ -33,7 +29,7 @@ import {
   updateSequence,
 } from './overlays';
 import { bakePickups, drawPickups, updatePickups } from './pickups';
-import { generatePipes, pipePieces, portalBacks, portalFronts, portalsGone } from './pipes';
+import { pipePieces, portalBacks, portalFronts, portalsGone } from './pipes';
 import { player, updatePlayer } from './player';
 import { createWalkSprites, loadSpriteSheet } from './sprites';
 
@@ -70,14 +66,13 @@ async function main(): Promise<void> {
 
   // Single 11x19 sheet frame, drawn 1:1 with no facing flips (facing art TBD);
   // the two walk frames are derived at bake time (§3 leg-cut)
-  playerSprites = createWalkSprites(PLAYER_SPRITE_X, PLAYER_SPRITE_Y, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
+  playerSprites = createWalkSprites(0, 0, PLAYER_WIDTH, PLAYER_HEIGHT);
   bakeEnemyTypes();
   bakePickups();
   bakeHud();
 
   generateMap();
   bakeTiles();
-  generatePipes(1);
   initInput(canvas);
   initOverlays();
   if (import.meta.env.DEV) {

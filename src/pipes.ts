@@ -154,7 +154,6 @@ function pipeSprite(
     flipH,
     flipV,
     rot90,
-    1,
     PIPE_STRIPE,
     color
   );
@@ -667,7 +666,7 @@ function placePortal(
  * Director's cut: swap `buildPipeSimple` for `buildPipeSnake` from
  * `src/directors-cut/pipe-snake.ts` (see SPEC.md §1 Director's Cut).
  */
-export function generatePipes(_seed: number): void {
+export function generatePipes(): void {
   pipePieces.length = 0;
   portalBacks.length = 0;
   portalFronts.length = 0;

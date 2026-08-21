@@ -12,7 +12,7 @@ import {
 import { getTile, TILE_WALL } from './map';
 import { RAINBOW_COLORS, unlockedColors } from './palette';
 import { damagePlayer, freezePlayer, getPlayerHitbox, player } from './player';
-import { hornPwr, novaPwr } from './stats';
+import { pwr, STAT_STR, STAT_WIS } from './stats';
 
 const HORN_MS = 250;
 const HORN_BEATS = 6;
@@ -235,40 +235,33 @@ function fireHorn(): void {
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemyHitbox(enemies[i]);
     if (overlaps(box.x, box.y, box.w, box.h, enemy.x, enemy.y, enemy.w, enemy.h)) {
-      hurtEnemyAt(i, HORN_DAMAGE * hornPwr());
+      hurtEnemyAt(i, HORN_DAMAGE * pwr(STAT_STR));
     }
   }
 }
 
 function fireNova(owner: Enemy | null, bits: number): void {
-  const pwr = owner ? 1 : novaPwr();
+  const amount = owner ? 1 : pwr(STAT_WIS);
   const c = owner ? enemyCenter(owner) : playerCenter();
+  const caster = owner || player;
   if (bits & N_GREEN) {
-    if (owner) {
-      owner.hp = Math.min(owner.maxHp, owner.hp + HEAL_AMOUNT);
-    } else {
-      player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT * pwr);
-    }
+    caster.hp = Math.min(caster.maxHp, caster.hp + HEAL_AMOUNT * amount);
   }
   if (bits & N_YELLOW) {
-    if (owner) {
-      owner.boost = SPEED_BURST_MS;
-    } else {
-      player.boost = SPEED_BURST_MS;
-    }
+    caster.boost = SPEED_BURST_MS;
   }
   if (bits & (N_RED | N_INDIGO)) {
     const t = owner ? playerCenter() : nearestEnemyCenter(c.x, c.y);
     if (t) {
       if (bits & N_RED) {
-        spawnBolt(c.x, c.y, t.x, t.y, BOLT_FIRE, FIREBALL_DAMAGE * pwr, !owner);
+        spawnBolt(c.x, c.y, t.x, t.y, BOLT_FIRE, FIREBALL_DAMAGE * amount, !owner);
       }
       if (bits & N_INDIGO) {
-        spawnBolt(c.x, c.y, t.x, t.y, BOLT_FROST, 0, !owner, FREEZE_MS * pwr);
+        spawnBolt(c.x, c.y, t.x, t.y, BOLT_FROST, 0, !owner, FREEZE_MS * amount);
       }
     }
   }
-  novas.push({ owner, bits, pwr, life: NOVA_LIFE, lastR: -1, seen: [], hitP: false });
+  novas.push({ owner, bits, pwr: amount, life: NOVA_LIFE, lastR: -1, seen: [], hitP: false });
 }
 
 function spawnBolt(

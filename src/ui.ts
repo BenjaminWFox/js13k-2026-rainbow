@@ -47,10 +47,9 @@ function bakeRainbowTitle(text: string, scale: number): HTMLCanvasElement {
   canvas.width = Math.max(1, w + 2);
   canvas.height = Math.max(1, h + 2);
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-  const s = text.toUpperCase();
   let colorIndex = 0;
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (ch === ' ') {
       continue;
     }
