@@ -1,4 +1,4 @@
-# Stolen Rainbows — Game Spec
+# Dye Hard — Game Spec
 
 A js13kgames compo entry. Total zipped package (code, graphics, audio) must be **under 13,312 bytes**.
 
@@ -97,9 +97,11 @@ destroy the pipes.
 
 ### Title screen and flow
 
-- **Title screen:** game title (**"Stolen Rainbows"**, working title) at the top, with a
+- **Title screen:** game title (**"Dye Hard"**, working title) at the top, with a
   **Start** button and an **Upgrades** button (opens the scrap shop). Settings / audio
   toggles are TBD.
+- **Title shortlist** (working; currently using Dye Hard): Prism Break, Pipe Dreams,
+  Dye Hard, Breaking Grey, Ocean's Seven, Live and Let Dye, The Color of Money.
 - **Start** plays the opening cutscene (below), then the run begins.
 - **Full loop:** title → Start → cutscene → run → win/death overlay → scrap shop → next
   run (cutscene again) … Pause menu's "Quit to Menu" returns to the title (treated as a

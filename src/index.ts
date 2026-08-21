@@ -12,7 +12,7 @@ import {
   TILE_SIZE,
   WALK_FRAME_MS,
 } from './constants';
-import { drawCutsceneUi, drawCutsceneWorld, updateCutscene } from './cutscene';
+import { drawCutsceneDrain, drawCutsceneUi, drawCutsceneWorld, drawPlazaShard, updateCutscene } from './cutscene';
 import { bakeEnemyTypes, drawEnemies, updateEnemies } from './enemies';
 import { drawExplosions, updateExplosions } from './fx';
 import { bakeHud, drawHud } from './hud';
@@ -28,11 +28,12 @@ import {
   SCENE_RUN,
   scene,
   startPendingDeathSequence,
+  tickColorWave,
   updateOverlays,
   updateSequence,
 } from './overlays';
 import { bakePickups, drawPickups, updatePickups } from './pickups';
-import { generatePipes, pipePieces, portalBacks, portalFronts } from './pipes';
+import { generatePipes, pipePieces, portalBacks, portalFronts, portalsGone } from './pipes';
 import { player, updatePlayer } from './player';
 import { createWalkSprites, loadSpriteSheet } from './sprites';
 
@@ -100,6 +101,7 @@ function gameLoop(time: number): void {
   }
   updateOverlays(viewWidth, viewHeight);
   if (scene === SCENE_CUTSCENE) {
+    tickColorWave(dt);
     updateCutscene(dt);
   } else if (!isWorldFrozen()) {
     if (isSequenceActive()) {
@@ -118,11 +120,11 @@ function gameLoop(time: number): void {
     updatePickups(dt);
     updateExplosions(dt);
   }
-  render();
+  render(time);
   clearPressedKeys();
 }
 
-function render(): void {
+function render(time: number): void {
   // The camera stays fractional; every draw position is rounded exactly once
   // via floor(worldX - cameraX). This keeps the player's screen position
   // perfectly stable while the camera follows (no 1px jitter from double
@@ -151,13 +153,20 @@ function render(): void {
     drawTiles(tileCanvases, cameraX, cameraY, firstTileX, firstTileY, lastTileX, lastTileY);
     ctx.restore();
   }
+  if (scene === SCENE_CUTSCENE) {
+    drawCutsceneDrain(ctx, cameraX, cameraY, firstTileX, firstTileY, lastTileX, lastTileY);
+  }
 
   drawPickups(ctx, cameraX, cameraY, viewWidth, viewHeight);
 
   if (scene === SCENE_CUTSCENE) {
     drawCutsceneWorld(ctx, cameraX, cameraY);
-  } else {
-    for (const piece of portalBacks) {
+  } else if (scene === SCENE_RUN) {
+    for (let i = 0; i < portalBacks.length; i++) {
+      if (portalsGone & (1 << i)) {
+        continue;
+      }
+      const piece = portalBacks[i];
       ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
     }
 
@@ -167,9 +176,17 @@ function render(): void {
 
     drawEnemies(ctx, cameraX, cameraY, viewWidth, viewHeight);
 
-    for (const piece of portalFronts) {
+    for (let i = 0; i < portalFronts.length; i++) {
+      if (portalsGone & (1 << i)) {
+        continue;
+      }
+      const piece = portalFronts[i];
       ctx.drawImage(piece.canvas, Math.floor(piece.x - cameraX), Math.floor(piece.y - cameraY));
     }
+  }
+
+  if (scene !== SCENE_CUTSCENE) {
+    drawPlazaShard(ctx, cameraX, cameraY, time);
   }
 
   const playerScreenX = Math.floor(player.x - cameraX);

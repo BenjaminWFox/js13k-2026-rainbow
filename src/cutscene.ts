@@ -1,83 +1,57 @@
-import { PLAYER_HEIGHT, PLAYER_WIDTH, WALK_FRAME_MS } from './constants';
-import { finalBossSprites, minibossSprites } from './enemies';
+import { PLAYER_HEIGHT, PLAYER_WIDTH, SHARD_X, SHARD_Y, TILE_SIZE } from './constants';
+import { finalBossSprites } from './enemies';
 import { bakeText, FONT_H, measureText } from './font';
 import { anyKeyPressed, mouse } from './input';
-import { bakeTiles } from './map';
+import { bakeTiles, getTile, tileCanvases } from './map';
+import { colorWave, WAVE_SPEED } from './overlays';
 import { unlockedColors } from './palette';
 import {
   greyPipeCanvas,
   type PipePiece,
-  pipeHomes,
   pipeRuns,
   plazaPortalParts,
   portalBacks,
   portalFronts,
 } from './pipes';
-import { player } from './player';
 import { createSprite, rebakeAllSprites } from './sprites';
 
-// Opening cutscene (§2): the world starts fully colored; the Business Boss
-// steps out of the plaza portal, dispatches the seven Business Men, the
-// pipes appear colorless and then activate one after another (each draining
-// its color), and the Shard sends the unicorn off. Any key/click advances a
-// dialogue panel; during choreography it skips straight to the greyscale
-// run-start state.
+// Opening cutscene: boss + portal already in the plaza, one line, pipes drop,
+// then all 7 reverse-waves run at once (portal → cap). Each color leaves the
+// rest of the world when its wave hits the cap. Shard gets the last line.
 
-const PH_ENTER = 0; // portal fades in, boss walks out
-const PH_TALK = 1; // two boss dialogue panels
-const PH_MARCH = 2; // minibosses leave, pipes appear, then activate/drain
-const PH_SHARD = 3; // closing shard panel
+const PH_TALK = 0;
+const PH_PIPES = 1;
+const PH_DRAIN = 2;
+const PH_SHARD = 3;
 
-const SCRIPT = [
-  'AHH WE FINALLY MADE IT! THESE COLORS ARE GOING TO MAKE ME RICH!!',
-  'ALRIGHT BUSINESS MEN, GET TO WORK!',
-  "OH NO! UNICORN, IT'S UP TO YOU TO FIND WHERE THOSE PIPES GO, AND DESTROY THEM!",
-];
-
-const PORTAL_FADE_MS = 500;
-const BOSS_SPEED = 0.04;
-const MINI_SPEED = 0.06;
-const MINI_GAP_MS = 300;
-// March timeline (ms from the march start)
-const BOSS_EXIT_AT = 2400;
-const REVEAL_AT = 1500;
+const LINE_BOSS = 'ALRIGHT BOYS LAY THOSE PIPES! THESE COLORS WILL MAKE US RICH!';
+const LINE_SHARD = 'UNICORN! FIND WHERE THOSE PIPES GO AND DESTROY THEM!';
 const REVEAL_GAP_MS = 220;
-const DRAIN_AT = 3600;
-const DRAIN_GAP_MS = 400;
-const MARCH_END = DRAIN_AT + 7 * DRAIN_GAP_MS + 500;
 
 let onDone: (() => void) | null = null;
-let phase = PH_ENTER;
+let phase = PH_TALK;
 /** Time within the current phase (ms). */
 let t = 0;
-/** Total cutscene time (ms), for bobbing/blinking. */
+/** Total cutscene time (ms), for shard bob and the dialogue blink. */
 let time = 0;
 /** Swallow the input that confirmed START on the same frame. */
 let skipGuard = false;
 
 let portalBack: PipePiece;
 let portalFront: PipePiece;
-let portalAlpha = 0;
+let showBoss = true;
 
-const boss = { x: 0, y: 0, shown: false, moving: false };
-let bossStandX = 0;
-let bossPortalX = 0;
+const boss = { x: 0, y: 0 };
 
-interface Walker {
-  x: number;
-  y: number;
-  dx: number;
-  dy: number;
-  launched: boolean;
-}
-const minis: Walker[] = [];
-
-/** Pipes revealed so far (colorless until activated). */
+/** Pipes revealed so far (colorless until that pipe's drain wave). */
 let revealed = 0;
-/** Pipes activated so far: stripe colored, world color drained. */
+/** Drain waves started (also used to color that pipe's stripe). */
 let drained = 0;
 
-let dlgIndex = 0;
+const drainWaves: { x: number; y: number; r: number; maxR: number; color: number; active: boolean }[] =
+  [];
+const greySlice: HTMLCanvasElement[] = [];
+
 let dlgLines: HTMLCanvasElement[] = [];
 let dlgBakedW = -1;
 
@@ -85,17 +59,16 @@ let shardSprite: HTMLCanvasElement | undefined;
 
 export function startCutscene(done: () => void): void {
   onDone = done;
-  phase = PH_ENTER;
+  phase = PH_TALK;
   t = 0;
   time = 0;
   skipGuard = true;
-  portalAlpha = 0;
   revealed = 0;
   drained = 0;
-  dlgIndex = 0;
+  drainWaves.length = 0;
+  showBoss = true;
   dlgBakedW = -1;
 
-  // Open on the pre-theft world: everything colored
   for (let i = 0; i < 7; i++) {
     unlockedColors[i] = true;
   }
@@ -109,24 +82,13 @@ export function startCutscene(done: () => void): void {
   const parts = plazaPortalParts();
   portalBack = parts.back;
   portalFront = parts.front;
-  bossPortalX = portalBack.x;
-  bossStandX = portalBack.x - PLAYER_WIDTH - 4;
-  boss.x = bossPortalX;
+  boss.x = portalBack.x - PLAYER_WIDTH - 4;
   boss.y = portalBack.y + portalBack.canvas.height - PLAYER_HEIGHT;
-  boss.shown = false;
-  boss.moving = false;
-
-  minis.length = 0;
-  for (const home of pipeHomes) {
-    const dx = home.x - bossPortalX;
-    const dy = home.y - boss.y;
-    const dist = Math.hypot(dx, dy) || 1;
-    minis.push({ x: bossPortalX, y: boss.y, dx: dx / dist, dy: dy / dist, launched: false });
-  }
 }
 
 /** Jump to the run-start state: all colors locked, all pipes standing. */
 function finish(): void {
+  colorWave.active = false;
   for (let i = 0; i < 7; i++) {
     unlockedColors[i] = false;
   }
@@ -139,13 +101,6 @@ function finish(): void {
   }
 }
 
-function drainNextColor(): void {
-  unlockedColors[drained] = false;
-  drained++;
-  bakeTiles();
-  rebakeAllSprites();
-}
-
 export function updateCutscene(dt: number): void {
   if (!onDone) {
     return;
@@ -155,73 +110,9 @@ export function updateCutscene(dt: number): void {
   t += dt;
   time += dt;
 
-  if (phase === PH_ENTER) {
-    if (pressed) {
-      finish();
-      return;
-    }
-    portalAlpha = Math.min(1, t / PORTAL_FADE_MS);
-    if (t > PORTAL_FADE_MS) {
-      boss.shown = true;
-      boss.moving = true;
-      boss.x = Math.max(bossStandX, boss.x - BOSS_SPEED * dt);
-      if (boss.x <= bossStandX) {
-        boss.moving = false;
-        phase = PH_TALK;
-        t = 0;
-      }
-    }
-    return;
-  }
-
   if (phase === PH_TALK) {
     if (pressed) {
-      dlgIndex++;
-      dlgBakedW = -1;
-      if (dlgIndex >= 2) {
-        phase = PH_MARCH;
-        t = 0;
-      }
-    }
-    return;
-  }
-
-  if (phase === PH_MARCH) {
-    if (pressed) {
-      finish();
-      return;
-    }
-    for (let i = 0; i < minis.length; i++) {
-      const mini = minis[i];
-      if (!mini.launched) {
-        if (t < i * MINI_GAP_MS) {
-          continue;
-        }
-        mini.launched = true;
-      }
-      mini.x += mini.dx * MINI_SPEED * dt;
-      mini.y += mini.dy * MINI_SPEED * dt;
-    }
-    if (boss.shown && t >= BOSS_EXIT_AT) {
-      boss.moving = true;
-      boss.x += BOSS_SPEED * dt;
-      if (boss.x >= bossPortalX) {
-        boss.shown = false;
-      }
-    }
-    if (!boss.shown && portalAlpha > 0) {
-      portalAlpha = Math.max(0, portalAlpha - dt / PORTAL_FADE_MS);
-    }
-    while (revealed < 7 && t >= REVEAL_AT + revealed * REVEAL_GAP_MS) {
-      revealed++;
-    }
-    while (drained < 7 && t >= DRAIN_AT + drained * DRAIN_GAP_MS) {
-      drainNextColor();
-    }
-    if (t >= MARCH_END) {
-      phase = PH_SHARD;
-      dlgIndex = 2;
-      dlgBakedW = -1;
+      phase = PH_PIPES;
       t = 0;
     }
     return;
@@ -229,10 +120,120 @@ export function updateCutscene(dt: number): void {
 
   if (pressed) {
     finish();
+    return;
+  }
+
+  if (phase === PH_PIPES) {
+    while (revealed < 7 && t >= revealed * REVEAL_GAP_MS) {
+      revealed++;
+      showBoss = false;
+    }
+    if (revealed >= 7) {
+      phase = PH_DRAIN;
+      startDrainWaves();
+    }
+    return;
+  }
+
+  if (phase === PH_DRAIN) {
+    let live = 0;
+    let locked = false;
+    for (const wave of drainWaves) {
+      if (!wave.active) {
+        continue;
+      }
+      wave.r += WAVE_SPEED * dt;
+      if (wave.r >= wave.maxR) {
+        wave.active = false;
+        unlockedColors[wave.color] = false;
+        locked = true;
+      } else {
+        live++;
+      }
+    }
+    if (locked) {
+      bakeTiles();
+      rebakeAllSprites();
+    }
+    if (live === 0) {
+      phase = PH_SHARD;
+      dlgBakedW = -1;
+    }
   }
 }
 
-/** World-space cutscene layer: revealed pipes, plaza portal, actors, shard. */
+function startDrainWaves(): void {
+  drained = 7;
+  drainWaves.length = 0;
+  for (let i = 0; i < 7; i++) {
+    const run = pipeRuns[i];
+    const start = run[0];
+    const cap = run[run.length - 1];
+    const ox = start.x + start.canvas.width / 2;
+    const oy = start.y + start.canvas.height / 2;
+    const cx = cap.x + cap.canvas.width / 2;
+    const cy = cap.y + cap.canvas.height / 2;
+    drainWaves.push({
+      x: ox,
+      y: oy,
+      r: 0,
+      maxR: Math.hypot(cx - ox, cy - oy),
+      color: i,
+      active: true,
+    });
+    unlockedColors[i] = false;
+    bakeTiles();
+    let canvas = greySlice[i];
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.width = TILE_SIZE;
+      canvas.height = TILE_SIZE;
+      greySlice[i] = canvas;
+    }
+    (canvas.getContext('2d') as CanvasRenderingContext2D).drawImage(tileCanvases[i], 0, 0);
+    unlockedColors[i] = true;
+  }
+  bakeTiles();
+}
+
+/** Clip each live drain so that color's slice greys from portal toward the cap. */
+export function drawCutsceneDrain(
+  ctx: CanvasRenderingContext2D,
+  cameraX: number,
+  cameraY: number,
+  firstTileX: number,
+  firstTileY: number,
+  lastTileX: number,
+  lastTileY: number
+): void {
+  if (phase !== PH_DRAIN) {
+    return;
+  }
+  for (const wave of drainWaves) {
+    if (!wave.active) {
+      continue;
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(wave.x - cameraX, wave.y - cameraY, wave.r, 0, Math.PI * 2);
+    ctx.clip();
+    const canvas = greySlice[wave.color];
+    for (let ty = firstTileY; ty <= lastTileY; ty++) {
+      for (let tx = firstTileX; tx <= lastTileX; tx++) {
+        if (getTile(tx, ty) === wave.color) {
+          ctx.drawImage(
+            canvas,
+            Math.floor(tx * TILE_SIZE - cameraX),
+            Math.floor(ty * TILE_SIZE - cameraY)
+          );
+        }
+      }
+    }
+    ctx.restore();
+  }
+}
+
+/** World-space cutscene layer: revealed pipes, plaza portal, boss, shard. */
 export function drawCutsceneWorld(
   ctx: CanvasRenderingContext2D,
   cameraX: number,
@@ -252,52 +253,40 @@ export function drawCutsceneWorld(
     ctx.drawImage(front.canvas, Math.floor(front.x - cameraX), Math.floor(front.y - cameraY));
   }
 
-  if (portalAlpha > 0) {
-    ctx.globalAlpha = portalAlpha;
+  if (showBoss) {
     ctx.drawImage(
       portalBack.canvas,
       Math.floor(portalBack.x - cameraX),
       Math.floor(portalBack.y - cameraY)
     );
-    ctx.globalAlpha = 1;
-  }
-  // Marching actors alternate the two leg-cut frames on the cutscene clock
-  const walkFrame = 1 + (((time / WALK_FRAME_MS) | 0) % 2);
-  for (let i = 0; i < minis.length; i++) {
-    const mini = minis[i];
-    if (mini.launched) {
-      ctx.drawImage(
-        minibossSprites[i][walkFrame],
-        Math.floor(mini.x - cameraX),
-        Math.floor(mini.y - cameraY)
-      );
+    if (finalBossSprites) {
+      ctx.drawImage(finalBossSprites[0], Math.floor(boss.x - cameraX), Math.floor(boss.y - cameraY));
     }
-  }
-  if (boss.shown && finalBossSprites) {
-    ctx.drawImage(
-      finalBossSprites[boss.moving ? walkFrame : 0],
-      Math.floor(boss.x - cameraX),
-      Math.floor(boss.y - cameraY)
-    );
-  }
-  if (portalAlpha > 0) {
-    ctx.globalAlpha = portalAlpha;
     ctx.drawImage(
       portalFront.canvas,
       Math.floor(portalFront.x - cameraX),
       Math.floor(portalFront.y - cameraY)
     );
-    ctx.globalAlpha = 1;
   }
 
-  if (shardSprite) {
-    const bob = Math.round(Math.sin(time / 300));
-    ctx.drawImage(
-      shardSprite,
-      Math.floor(player.x + 2 - cameraX),
-      Math.floor(player.y - 15 - cameraY) + bob
-    );
+  drawPlazaShard(ctx, cameraX, cameraY, time);
+}
+
+/** Shard hovering at the plaza. Title, cutscene, and run all use this position. */
+export function drawPlazaShard(
+  ctx: CanvasRenderingContext2D,
+  cameraX: number,
+  cameraY: number,
+  t: number
+): void {
+  if (!shardSprite) {
+    shardSprite = createSprite(99, 0, 7, 11);
   }
+  ctx.drawImage(
+    shardSprite,
+    Math.floor(SHARD_X - cameraX),
+    Math.floor(SHARD_Y - cameraY) + Math.round(Math.sin(t / 300))
+  );
 }
 
 function wrap(text: string, maxW: number): string[] {
@@ -340,7 +329,9 @@ export function drawCutsceneUi(
 
   if (dlgBakedW !== textW) {
     dlgBakedW = textW;
-    dlgLines = wrap(SCRIPT[dlgIndex], textW).map((line) => bakeText(line));
+    dlgLines = wrap(phase === PH_SHARD ? LINE_SHARD : LINE_BOSS, textW).map((line) =>
+      bakeText(line)
+    );
   }
 
   ctx.fillStyle = '#fff';
@@ -369,7 +360,6 @@ export function drawCutsceneUi(
     ctx.drawImage(dlgLines[i], textX, textY + i * lineH);
   }
 
-  // Blinking advance marker
   if (time % 800 < 400) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(px + panelW - 4, py + panelH - 4, 2, 2);

@@ -21,6 +21,12 @@ export interface PipePiece {
 export const pipePieces: PipePiece[] = [];
 export const portalBacks: PipePiece[] = [];
 export const portalFronts: PipePiece[] = [];
+/** Bit i set = edge portal i is gone (removed when that color's restore wave starts). */
+export let portalsGone = 0;
+
+export function hidePipePortal(color: number): void {
+  portalsGone |= 1 << color;
+}
 /** Pieces per pipe, portal → cap. Same objects as `pipePieces`. */
 export const pipeRuns: PipePiece[][] = [];
 /** Miniboss stand positions, just inward of each portal. */
@@ -665,6 +671,7 @@ export function generatePipes(_seed: number): void {
   pipePieces.length = 0;
   portalBacks.length = 0;
   portalFronts.length = 0;
+  portalsGone = 0;
   pipeRuns.length = 0;
   pipeHomes.length = 0;
   bakePieces();

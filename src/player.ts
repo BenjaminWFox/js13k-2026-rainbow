@@ -1,8 +1,8 @@
 import {
-  MAP_HEIGHT,
-  MAP_WIDTH,
   PLAYER_HEIGHT,
   PLAYER_HIT,
+  PLAYER_SPAWN_X,
+  PLAYER_SPAWN_Y,
   PLAYER_SPEED,
   TILE_SIZE,
 } from './constants';
@@ -24,8 +24,8 @@ import {
 
 export const player = {
   // Top-left corner of the player sprite, world-space pixels
-  x: (MAP_WIDTH / 2) * TILE_SIZE,
-  y: (MAP_HEIGHT / 2) * TILE_SIZE,
+  x: PLAYER_SPAWN_X,
+  y: PLAYER_SPAWN_Y,
   // Last-move facing, diagonals included. Initial facing is right.
   faceX: 1,
   faceY: 0,
@@ -93,8 +93,8 @@ let lastDiagY = 0;
 let diagGrace = -1;
 
 export function resetPlayer(): void {
-  player.x = (MAP_WIDTH / 2) * TILE_SIZE;
-  player.y = (MAP_HEIGHT / 2) * TILE_SIZE;
+  player.x = PLAYER_SPAWN_X;
+  player.y = PLAYER_SPAWN_Y;
   player.faceX = 1;
   player.faceY = 0;
   player.moving = false;

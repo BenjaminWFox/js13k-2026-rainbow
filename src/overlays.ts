@@ -15,7 +15,7 @@ import { mouse, wasPressed } from './input';
 import { bakeTiles, snapshotTiles } from './map';
 import { RAINBOW_COLORS, unlockedColors } from './palette';
 import { consumeLevelUp, resetPickups, scrap, spendScrap } from './pickups';
-import { generatePipes, spawnPlazaPortal, takePipeSegment } from './pipes';
+import { generatePipes, hidePipePortal, pipeRuns, spawnPlazaPortal, takePipeSegment } from './pipes';
 import { player, resetPlayer, tryRevive } from './player';
 import { loadSave, saveGame } from './save';
 import { rebakeAllSprites } from './sprites';
@@ -46,7 +46,7 @@ export let scene = SCENE_TITLE;
 const PHASE_PIPE = 0;
 const PHASE_WAVE = 1;
 const PIPE_GAP_MS = 45;
-const WAVE_SPEED = 0.38;
+export const WAVE_SPEED = 0.38;
 
 let pauseOpen = false;
 let hand: DraftCard[] = [];
@@ -59,7 +59,7 @@ let seq: {
 } | null = null;
 let finaleStarted = false;
 
-export const colorWave = { active: false, x: 0, y: 0, r: 0 };
+export const colorWave = { active: false, x: 0, y: 0, r: 0, maxR: 0 };
 
 /** Later overlays (pipe-unlock, death, win) push here so they never overlap. */
 const overlayQueue: (() => void)[] = [];
@@ -79,8 +79,13 @@ export function isSequenceActive(): boolean {
 function openTitle(): void {
   pauseOpen = false;
   scene = SCENE_TITLE;
+  for (let i = 0; i < 7; i++) {
+    unlockedColors[i] = true;
+  }
+  bakeTiles();
+  rebakeAllSprites();
   openMenu(
-    'STOLEN RAINBOWS',
+    'DYE HARD',
     ['START', 'UPGRADES'],
     (index) => {
       if (index === 0) {
@@ -89,7 +94,7 @@ function openTitle(): void {
         openShop(true);
       }
     },
-    2,
+    3,
     true
   );
 }
@@ -201,13 +206,42 @@ function beginWave(color: number, x: number, y: number): void {
   unlockedColors[color] = true;
   bakeTiles();
   rebakeAllSprites();
+  startWave(x, y);
+  hidePipePortal(color);
+  if (seq) {
+    seq.phase = PHASE_WAVE;
+  }
+}
+
+function startWave(x: number, y: number, maxR = 0): void {
   colorWave.active = true;
   colorWave.x = x;
   colorWave.y = y;
   colorWave.r = 0;
-  if (seq) {
-    seq.phase = PHASE_WAVE;
+  colorWave.maxR = maxR;
+}
+
+/** Advance the recolor/drain clip. Returns true on the frame it finishes. */
+export function tickColorWave(dt: number): boolean {
+  if (!colorWave.active) {
+    return false;
   }
+  colorWave.r += WAVE_SPEED * dt;
+  const worldW = MAP_WIDTH * TILE_SIZE;
+  const worldH = MAP_HEIGHT * TILE_SIZE;
+  const maxR =
+    colorWave.maxR ||
+    Math.max(
+      Math.hypot(colorWave.x, colorWave.y),
+      Math.hypot(worldW - colorWave.x, colorWave.y),
+      Math.hypot(colorWave.x, worldH - colorWave.y),
+      Math.hypot(worldW - colorWave.x, worldH - colorWave.y)
+    );
+  if (colorWave.r >= maxR) {
+    colorWave.active = false;
+    return true;
+  }
+  return false;
 }
 
 function pumpOverlays(): void {
@@ -291,11 +325,12 @@ export function startPendingDeathSequence(
   }
   unlockNextTier();
   killOnScreenRegulars(camX, camY, viewW, viewH);
+  const start = pipeRuns[death.color][0];
   seq = {
     phase: PHASE_PIPE,
     color: death.color,
-    x: death.x,
-    y: death.y,
+    x: start.x + start.canvas.width / 2,
+    y: start.y + start.canvas.height / 2,
     wait: 0,
   };
 }
@@ -321,17 +356,7 @@ export function updateSequence(dt: number): void {
     return;
   }
 
-  colorWave.r += WAVE_SPEED * dt;
-  const worldW = MAP_WIDTH * TILE_SIZE;
-  const worldH = MAP_HEIGHT * TILE_SIZE;
-  const maxR = Math.max(
-    Math.hypot(colorWave.x, colorWave.y),
-    Math.hypot(worldW - colorWave.x, colorWave.y),
-    Math.hypot(colorWave.x, worldH - colorWave.y),
-    Math.hypot(worldW - colorWave.x, worldH - colorWave.y)
-  );
-  if (colorWave.r >= maxR) {
-    colorWave.active = false;
+  if (tickColorWave(dt)) {
     const color = seq.color;
     seq = null;
     openUnlock(color);

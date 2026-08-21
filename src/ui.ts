@@ -1,5 +1,7 @@
-import { bakeText, FONT_H } from './font';
+import { PLAYER_HEIGHT } from './constants';
+import { bakeText, drawText, FONT_GAP, FONT_H, FONT_W, measureText } from './font';
 import { mouse, wasPressed } from './input';
+import { RAINBOW_COLORS } from './palette';
 
 const LAYOUT_LIST = 0;
 const LAYOUT_CARDS = 1;
@@ -38,6 +40,38 @@ export function closeUi(): void {
   rects.length = 0;
 }
 
+/** ROYGBIV per letter; 1px black outline for contrast on the plaza. */
+function bakeRainbowTitle(text: string, scale: number): HTMLCanvasElement {
+  const { w, h } = measureText(text, scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, w + 2);
+  canvas.height = Math.max(1, h + 2);
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+  const s = text.toUpperCase();
+  let colorIndex = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === ' ') {
+      continue;
+    }
+    const ox = 1 + i * (FONT_W + FONT_GAP) * scale;
+    drawText(ctx, ch, ox - 1, 1, '#000', scale);
+    drawText(ctx, ch, ox + 1, 1, '#000', scale);
+    drawText(ctx, ch, ox, 0, '#000', scale);
+    drawText(ctx, ch, ox, 2, '#000', scale);
+    drawText(
+      ctx,
+      ch,
+      ox,
+      1,
+      '#' + RAINBOW_COLORS[colorIndex % 7].toString(16).padStart(6, '0'),
+      scale
+    );
+    colorIndex++;
+  }
+  return canvas;
+}
+
 export function openMenu(
   title: string | null,
   items: string[],
@@ -47,7 +81,11 @@ export function openMenu(
   subtitle?: string
 ): void {
   layout = LAYOUT_LIST;
-  heading = title ? bakeText(title, '#fff', titleScale) : null;
+  heading = title
+    ? titleAtTop
+      ? bakeRainbowTitle(title, titleScale)
+      : bakeText(title, '#fff', titleScale)
+    : null;
   subheading = subtitle ? bakeText(subtitle) : null;
   headingTop = titleAtTop;
   labels = items.map((item) => bakeText(item));
@@ -88,10 +126,10 @@ function layoutUi(viewWidth: number, viewHeight: number): void {
   }
 
   if (layout === LAYOUT_LIST) {
-    const padX = 4;
-    const padY = 3;
-    const boxH = FONT_H + padY * 2 + 2;
-    const gap = 3;
+    const padX = headingTop ? 6 : 4;
+    const padY = headingTop ? 4 : 3;
+    const boxH = labels[0].height + padY * 2 + 2;
+    const gap = headingTop ? 4 : 3;
     let inner = 40;
     for (const label of labels) {
       if (label.width > inner) {
@@ -106,12 +144,10 @@ function layoutUi(viewWidth: number, viewHeight: number): void {
     if (heading) {
       headingX = (viewWidth - heading.width) >> 1;
       if (headingTop) {
-        headingY = 16;
-        if (subheading) {
-          subX = (viewWidth - subheading.width) >> 1;
-          subY = headingY + heading.height + 4;
-        }
-        y = (viewHeight - blockH) >> 1;
+        // Unicorn is camera-centered; shard sits 25px above its sprite top.
+        const playerY = (viewHeight - PLAYER_HEIGHT) >> 1;
+        headingY = playerY - 25 - 8 - heading.height;
+        y = playerY + PLAYER_HEIGHT + 8;
       } else {
         const total = heading.height + 8 + subH + blockH;
         headingY = (viewHeight - total) >> 1;
@@ -195,8 +231,10 @@ export function drawUi(ctx: CanvasRenderingContext2D, viewWidth: number, viewHei
   }
   layoutUi(viewWidth, viewHeight);
 
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(0, 0, viewWidth, viewHeight);
+  if (!headingTop) {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, viewWidth, viewHeight);
+  }
 
   if (heading) {
     ctx.drawImage(heading, headingX, headingY);
@@ -217,7 +255,7 @@ export function drawUi(ctx: CanvasRenderingContext2D, viewWidth: number, viewHei
     ctx.rect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
     ctx.clip();
     const titleX = r.x + ((r.w - labels[i].width) >> 1);
-    const titleY = r.y + 4;
+    const titleY = r.y + ((r.h - labels[i].height - (bodies[i] ? FONT_H + 3 : 0)) >> 1);
     ctx.drawImage(labels[i], titleX, titleY);
     if (bodies[i]) {
       const bodyX = r.x + ((r.w - bodies[i].width) >> 1);
