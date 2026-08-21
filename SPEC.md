@@ -84,10 +84,10 @@ destroy the pipes.
   powers, XP, and in-run stats **reset** each run. Death ends the run after revives are
   spent. Scrap and shop ranks persist between runs (see Scrap).
 - **Objective:** find all 7 pipes. Each pipe is guarded by a **miniboss**. Defeating a
-  miniboss destroys its pipe, **releases one color**, and **grants that color's power
-  immediately**. The power then starts auto-firing.
+  miniboss destroys its pipe, **releases one color**, and **adds that color's bit to the
+  nova** immediately (the next pulse uses it).
 - **Order:** pipes can be tackled in **any order**. Every miniboss must be beatable with
-  the starting kit (horn + stomp) alone.
+  the starting kit (horn + white nova) alone.
 - **Finale:** once all 7 colors are released, the **final boss** re-opens the plaza portal
   and comes through, triggering the end fight.
 - **Win:** destroy all 7 pipes, then beat the final boss. No survival timer — revisit
@@ -125,12 +125,12 @@ greyscale run-start state).
 
 ### Run loop
 
-1. **Start:** center spawn, greyscale world, horn + stomp owned, shop starting
+1. **Start:** center spawn, greyscale world, horn + white nova owned, shop starting
    stats/HP/speed applied.
 2. **Play:** move only. Enemies spawn around the player. Crystals and scrap magnet in.
 3. **Level-up:** pause, pick 1 card, resume.
 4. **Pipe:** walk to a miniboss, kill it → miniboss death sequence (see Enemies), ending
-   in the pipe-unlock overlay. Then that power auto-fires.
+   in the pipe-unlock overlay. Then that color's nova bit is on.
 5. **Death:** if a revive remains, revive **in place** and continue. Otherwise the run ends.
 6. **Win or death overlay**, then the **scrap shop**, then the next run.
 
@@ -154,63 +154,73 @@ The pipe-unlock overlay still fires in either case (see the miniboss death seque
 
 - **Health:** baseline **100 HP**. CON (in-run and shop) increases max HP. Shop Start HP
   adds extra max HP at run start (amounts TBD).
-- **No mana.** Abilities do not spend a resource; they auto-fire on independent cooldowns.
+- **No mana.** Abilities do not spend a resource; they auto-fire.
 - **Starting kit** (owned at run start, always auto-firing):
   - **Horn** — melee damage in the facing direction. Facing = **last-move direction**
-    (diagonals included); initial facing before any movement is **right**.
-  - **Stomp** — self-centered area attack with a small knock-back to enemies.
+    (diagonals included); initial facing before any movement is **right**. Own cooldown
+    (**650ms**, **10** base damage). Scales with **STR** only (**+20% per rank**).
+  - **Nova (white)** — the kit stomp. A self-centered expanding ring: **area damage +
+    knockback** as the leading edge passes enemies. See Auto-combat.
 - **Hitboxes:** 11×11 aligned to the **bottom** of the 11×19 player sprite (horn/head
   sticks out above). Same box for every facing; sprite facing art is TBD.
 - Movement collision uses that hitbox only.
-- The player **can be frozen** (by blue/indigo miniboss powers) and, like all frozen
+- The player **can be frozen** (by blue/indigo on an enemy nova) and, like all frozen
   entities, takes **+25% damage** while frozen.
 
 ### Auto-combat
 
-- Every owned ability fires on **its own cooldown**. Several can fire at once.
-- **No ability keys.** The player never triggers attacks manually.
-- Targeting:
-  - Horn → facing (last-move direction; initial = right).
-  - Fireball, frostball → **nearest enemy**.
-  - Stomp, flame nova, frost nova, heal, shield → **self-centered**.
-- **Projectiles** (player *and* boss): fly in a **straight line** toward the target's
-  position **at the time of firing** — no tracking. They impact the **first enemy hit**,
-  even if it wasn't the original target. They pass **over pipes**, are **blocked by
-  walls**, and **despawn off-screen** on a miss.
-- **Freeze:**
-  - **Frost nova** — freeze only (no damage); fires every **5s**; freezes regular
-    enemies in its area for **0.5s**.
-  - **Frostball** — freeze only (no damage); fires every **3s**; freezes regular
-    enemies within a radius of **2× sprite size from the impact point** for **0.5s**.
-  - Frozen entities (enemies *and* player) take **+25% damage**.
-  - Minibosses and the final boss **cannot be frozen** — they are **slowed** instead, for
-    **2× the freeze duration**.
-- **Heal** (green): auto-fires a small HP pulse; show a small green `+` when it ticks.
-- **Shield** (violet): auto-fires an absorb that **stays until used up**; show a
-  visible ring around the player sprite while active.
-- **Yellow speed** is not a fireable ability (see Powers).
-- Remaining numbers TBD: horn/stomp/fireball/flame-nova cooldowns and damage, stomp
-  knock-back, heal amount, shield absorb.
+- **Two fireables:** horn (own cooldown) and **one nova** (shared period). **No ability
+  keys.** The player never triggers attacks manually.
+- **Nova:** one expanding ring that **follows the caster** for **500ms** out to **66 px**.
+  Default **period 2s**. Each owned color is a **bit** on that pulse. Visual: **1px
+  concentric strokes**, white innermost (player kit only), then owned colors in
+  **ROYGBIV** order (gaps if pipes were taken out of order).
+- **One leading edge.** Effects that apply on the wave hit an entity the first time
+  `prevRadius < dist ≤ radius`. Instant (on fire) vs swept (wavefront):
 
-### Powers (one per released color)
+  | When | Bits | Effect |
+  |------|------|--------|
+  | Fire | Red | 1 fireball at nearest enemy (player) / at the player (boss). Skip the bolt if there is no target. |
+  | Fire | Indigo | 1 frostball, same targeting as red. |
+  | Fire | Yellow | Speed burst on the **caster** (**1s**; **+15%** move speed × nova PWR). |
+  | Fire | Green | Heal the **caster** (**8** HP × nova PWR). |
+  | Sweep | White | Stomp damage (**5** × nova PWR) + knockback (**0.36** px/ms; bosses take 50%). |
+  | Sweep | Orange | Area damage (**6** × nova PWR). |
+  | Sweep | Blue | Freeze **0.5s** × nova PWR (bosses: slow for **2×** that). |
+  | Sweep | Violet | Destroy **hostile** bolts the wavefront crosses (player nova eats enemy shots; enemy nova eats player shots). Same-nova friendly bolts are not eaten. |
 
-Destroying a pipe **grants that power immediately** (it does not go through the level-up
-draft). Color damage powers (fireball, flame nova) scale with **WIS**. Heal, shield,
-speed, frost nova, and frostball ignore STR/WIS.
+- White + orange on the same contact: **one** damage number (sum), after freeze. Freeze
+  then damage means this hit can take the **+25%** frozen bonus if blue is also on.
+- Knockback only if white is on **and** the enemy survived.
+- Bosses use **base** amounts (nova PWR = 1). Player nova PWR = **1 + 0.2 × WIS**.
+- **Projectiles** (player *and* boss): spawned when the nova fires if that bit is on.
+  Fly in a **straight line** toward the target's position **at fire time** — no tracking.
+  They impact the **first enemy hit**, even if it wasn't the original target. They pass
+  **over pipes**, are **blocked by walls**, and **despawn off-screen** on a miss.
+  Frostball freeze radius on impact: **2× sprite size** (14 px).
+- Frozen entities (enemies *and* player) take **+25% damage**. Minibosses and the final
+  boss **cannot be frozen** — they are **slowed** instead, for **2× the freeze duration**.
 
-| Color  | Hex      | Power                                    |
-|--------|----------|------------------------------------------|
-| Red    | `e40404` | Fireball — ranged damage (nearest enemy)  |
-| Orange | `ff8200` | Flame nova — self-centered area damage    |
-| Yellow | `f1e300` | Speed — passive move-speed increase       |
-| Green  | `08ba00` | Heal — cooldown HP pulse                  |
-| Blue   | `0030e2` | Frost nova — self-centered area freeze (5s cooldown, 0.5s freeze) |
-| Indigo | `6c00ef` | Frostball — nearest-enemy freeze, small impact radius (3s cooldown, 0.5s freeze) |
-| Violet | `a656ff` | Damage shield — absorbs incoming damage while active |
+### Powers (one bit per released color)
 
-**Yellow speed:** not fireable. Unlocking yellow **immediately** raises move speed. Speed
-then joins the level-up pool and can stack like other owned powers. Shop Start Speed
-stacks with this.
+Destroying a pipe **turns that color's nova bit on immediately** (it does not go through
+the level-up draft). All nova numbers on the **player** pulse scale with **WIS** (nova
+PWR). Horn is the only STR-scaled attack. Powers are not drafted or ranked.
+
+| Color  | Hex      | Bit (on the nova) |
+|--------|----------|-------------------|
+| Red    | `e40404` | Fireball — ranged damage (nearest enemy) |
+| Orange | `ff8200` | Flame — area damage on the wavefront |
+| Yellow | `f1e300` | Speed — burst on the caster when the nova fires |
+| Green  | `08ba00` | Heal — HP pulse on the caster when the nova fires |
+| Blue   | `0030e2` | Frost — area freeze on the wavefront |
+| Indigo | `6c00ef` | Frostball — nearest-enemy freeze, small impact radius |
+| Violet | `a656ff` | Ward — wavefront destroys hostile projectiles |
+
+**Yellow speed:** not a permanent stat. Unlocking yellow makes the nova apply a **burst**
+each pulse. Shop Start Speed is always-on and stacks with the burst while it is active.
+The yellow **miniboss** uses a shorter nova period (**0.5s**) so its burst (**1s**) never
+drops for a meaningful time (permanent-looking haste).
 
 ### Stats
 
@@ -220,12 +230,10 @@ the draft pool.
 
 | Stat | Effect |
 |------|--------|
-| STR | Increases starting-kit damage only (horn, stomp) |
+| STR | Horn damage only (**+20% per rank**) |
 | DEX | Reduces incoming damage by **10% per rank** (multiplied into damage taken; max 50% at cap) |
-| CON | Increases player max HP |
-| WIS | Increases color damage powers (fireball, flame nova) |
-
-Heal, shield, speed, frost nova, and frostball ignore STR/WIS. Per-rank amounts for STR/CON/WIS: **TBD**.
+| CON | Increases player max HP (**+20 per rank**) |
+| WIS | Nova PWR — **+20% per rank** on nova damage, heal, freeze duration, and yellow burst amount |
 
 ### XP and level-up
 
@@ -235,11 +243,8 @@ Heal, shield, speed, frost nova, and frostball ignore STR/WIS. Per-rank amounts 
   in the scrap shop.
 - Filling the XP bar **pauses** the game. Pick **1** card from a base of **3**, then resume.
   Luck can add a 4th and 5th card (see Scrap shop) — extras are chanced, not guaranteed.
-- **Draft pool:** STR / DEX / CON / WIS (until capped) + every owned attack/power (horn,
-  stomp, and any color power already granted, including yellow speed).
-- **Power stack rule:** rank 1 = base power. **Even ranks add damage** (or freeze
-  duration for frost nova/frostball); **odd ranks (3, 5, …) reduce cooldown.** Exact
-  per-rank amounts TBD. Stat picks simply add a rank.
+- **Draft pool:** STR / DEX / CON / WIS only (until capped). Color bits come from pipes;
+  horn/nova are kit. No power cards, no cooldown ranks.
 - Duplicate cards in a single hand: TBD.
 
 ### Magnet and pickups
@@ -262,20 +267,20 @@ the first thing to drop, not the whole system.
   scrap on the ground is lost.
 - Spent in a **between-run shop** (after the death or victory overlay), also reachable
   from the title screen via **Upgrades**.
-- Persist scrap + purchased ranks in **localStorage**. World progress, powers, XP, and
-  in-run stats are **not** saved.
+- Persist scrap + purchased ranks in **localStorage**. World progress, released colors,
+  XP, and in-run stats are **not** saved.
 
 #### Scrap shop
 
-Each row can be bought **3 ranks**. Prices TBD. Not in the shop: starting horn/stomp
-levels, global cooldown/damage.
+Each row can be bought **3 ranks**. Prices TBD. Not in the shop: horn/nova kit, nova
+period.
 
 | Row | 3 ranks |
 |-----|---------|
 | Luck | Extra draft cards are chanced. Start 0%. Ranks: **25/50/75%** for a 4th card; **20/40/60%** for a 5th, rolled **only if** the 4th was granted. |
-| STR, DEX, CON, WIS | Four separate starting-stat rows (count toward the 5-rank stat cap). Amounts per rank TBD (DEX = 10%/rank). |
+| STR, DEX, CON, WIS | Four separate starting-stat rows (count toward the 5-rank stat cap). STR/WIS **+20%/rank**, CON **+20 HP**, DEX **10%/rank**. |
 | Start HP | Extra max HP at run start (beyond CON). Amounts TBD. |
-| Start Speed | Extra move speed at run start (beyond yellow). Amounts TBD. |
+| Start Speed | Extra move speed at run start (always-on; stacks with the yellow nova burst). Amounts TBD. |
 | Magnet | Attract radius **+25%** per rank. |
 | XP gain | Relative crystal drop-chance **+33/66/100%** vs each enemy's inherent chance. |
 | Scrap gain | Relative scrap drop-chance **+33/66/100%** vs each enemy's inherent chance. |
@@ -331,12 +336,14 @@ The only color on each is the **eyes**, tinted to the rainbow color that minibos
 guards/steals.
 
 - **HP: 100** (same as the player's baseline).
-- **Attacks:** touch-based like regular enemies, **plus the power associated with its
-  color** (e.g. the red miniboss shoots fireballs; blue/indigo can freeze the player).
+- **Attacks:** touch-based like regular enemies, **plus the same nova** with **only that
+  color's bit** (e.g. the red miniboss's pulse launches a fireball; blue/indigo can freeze
+  the player; violet eats player bolts). Fires while chasing, on the default **2s**
+  period — except **yellow at 0.5s** so the speed burst stays up.
 - **Engagement:** chases the player from within **75 px**; stops pursuing beyond
   **250 px**; **HP resets** if the player moves beyond **500 px**.
-- **Speed: 0.04** px/ms (vs player 0.05) — except the **yellow** miniboss at **0.06**.
-- Takes **50% of normal knockback** from the player's stomp. Cannot be frozen (slowed
+- **Speed: 0.04** px/ms (vs player 0.05) — **0.06** while the yellow burst is active.
+- Takes **50% of normal knockback** from the player's white nova. Cannot be frozen (slowed
   2× freeze duration instead).
 
 #### Miniboss death sequence
@@ -348,8 +355,8 @@ guards/steals.
 4. The **recolor wave** runs.
 5. The **pipe-unlock overlay** shows: color unlocked, power name, what it does (same card
    family as level-up).
-6. If the XP bar filled, the **level-up card** shows next. Then play resumes and the new
-   power auto-fires.
+6. If the XP bar filled, the **level-up card** shows next. Then play resumes with that
+   color's nova bit on.
 
 #### Final boss
 
@@ -358,8 +365,9 @@ guards/steals.
 - Re-opens the **plaza portal** (right side of the central white plaza) and emerges once
   all 7 colors are released.
 - **HP: 200.**
-- Has **all the player's powers** — including heal and shield (revisit and drop those if
-  the fight drags) — with speed capped at **0.05** (the player's base).
+- Fires **one rainbow nova** (red, orange, green, blue, indigo, violet — **no** white
+  kit stomp, **no** yellow burst) on the default **2s** period. Speed capped at **0.05**
+  (the player's base). Revisit and drop heal/ward bits if the fight drags.
 - **Unleashed:** pursues the player across the whole map; **HP never resets**.
 - Cannot be frozen (slowed 2× freeze duration instead).
 
@@ -411,7 +419,7 @@ guards/steals.
     - Pipe laying and pipe destruction: zzfx(...[1.64,,150,,.08,.13,4,2.84,.1,.1,10,,.07,1.7,1,.1,.09,.8,.08]); // Hit 66
     - Success (beat a boss): zzfx(...[.6,,334,.07,1,.16,,.9,,,200,.06,.06,,,,,.64,.24,,297]); // Powerup 1077
     - Pickup (crystal/scrap) AND button move/click: zzfx(...[,,507,,.04,.11,1,,,,250,.04,,,,,,.74,.02,,-1380]); // Pickup 1044
-    - Stomp & magic/nova attacks: zzfx(...[,,91,.04,.04,.51,5,.1,-2,5,,,,1.9,,.9,,.44,.15]); // Explosion 1071
+    - Nova attacks: zzfx(...[,,91,.04,.04,.51,5,.1,-2,5,,,,1.9,,.9,,.44,.15]); // Explosion 1071
     - Enemy is hit: zzfx(...[5,,266,.02,.05,.04,,3,-1,,,,,1.2,2.1,,,.88,.07,,1914]); // Hit 1046
     - Horn attack: zzfx(...[,,172,.01,.04,.16,4,.2,8,,,,,1.5,,.1,,.45,.06]); // Hit 1082
 
@@ -613,8 +621,8 @@ on the right. No diagonal pipe piece.
 These are deliberately **not** sheet art; draw them with rects/arcs at bake or in the UI
 layer:
 
-- Projectiles (fireball, frostball), flame/frost **nova rings**, **shield ring**,
-  heal **`+`** tick.
+- Projectiles (fireball, frostball) and the **nova** (concentric 1px color strokes;
+  white + owned ROYGBIV). No shield ring, no heal `+`.
 - Enemy **shadows** (2-frame pixel circle) and the tintable **pixel explosion**.
 - All HUD elements (bars, color squares, pause icon) and all **text** (bit-packed font,
   §3).
@@ -667,11 +675,11 @@ the rainbow colors.
   animation is **implemented** (§3 leg-cut bake, 150ms cadence, spec cut coordinates —
   they match the art exactly); only visual tuning of the cadence remains if desired.
 - XP curve (crystals per level) and inherent crystal/scrap drop chances per enemy type.
-- Combat numbers: horn/stomp/fireball/flame-nova cooldowns and damage, stomp knock-back,
-  heal amount, shield absorb, yellow speed per stack, per-rank power amounts.
-- Per-rank stat amounts for STR/CON/WIS (DEX is decided: 10%/rank); whether CON heals
-  current HP when max HP grows.
-- Whether **power** stacks are capped (stats cap at 5 ranks; powers currently uncapped).
+- Combat numbers (placeholders in code, tune in play): horn cooldown/damage, nova
+  period/duration/radius, white/orange/fireball damage, knockback, heal, freeze, yellow
+  burst duration and amount, yellow-miniboss period.
+- Per-rank STR/CON/WIS amounts are in code (20% / +20 HP / 20% nova PWR); whether CON
+  heals current HP when max HP grows.
 - Duplicate cards in a single hand: allowed or not.
 - Revive: HP restored and i-frames (likely needed so the swarm doesn't instantly re-kill);
   whether the revive count appears on the HUD.
@@ -697,19 +705,19 @@ self-contained work any competent model can execute from this spec.
 
 Already built (no work needed): bake engine, palette/desaturation, pipes, world slices +
 plaza, camera, player movement/collision (§3), swarm core, starting-kit combat, packed
-font + HUD, menu/overlay framework (pause, level-up draft, stats), color powers +
+font + HUD, menu/overlay framework (pause, level-up draft, stats), unified nova +
 projectiles + freeze, minibosses + pipe destruction + color wave.
 
 | Phase | Work | Model | Why | Complete |
 |-------|------|-------|-----|----------|
 | 1 | **Swarm core:** spawn ring/rate/cap, teleport-back/despawn, chase movement, float bob + shadow, spatial-grid separation, contact damage, player HP + under-player HP bar | Flagship | Performance under a 150-enemy cap and the most interlocking rules in the game; everything else sits on top of it | ✅ |
-| 2 | **Starting-kit combat:** horn, stomp + knockback, enemy HP/death, pixel explosion, crystal/scrap drops, magnet + pickup | Capable | Fully specified, self-contained math; makes the game playable end-to-end early | ✅ |
+| 2 | **Starting-kit combat:** horn, white nova + knockback, enemy HP/death, pixel explosion, crystal/scrap drops, magnet + pickup | Capable | Fully specified, self-contained math; makes the game playable end-to-end early | ✅ |
 | 3 | **Packed font + HUD:** font renderer + label baking, XP bar, "Level #", scrap counter, color squares, pause icon | Capable | Well-bounded; unblocks every later text UI | ✅ |
 | 4 | **Menu/overlay framework:** shared card/menu component, mouse + keyboard input, pause menu, level-up draft + XP curve, stat application | Flagship | One reusable UI system serving five screens under byte pressure — structure decisions here echo everywhere | ✅ |
-| 5 | **Powers:** all 7 color powers, projectiles, freeze/slow, WIS scaling, stack rule | Flagship | Seven abilities sharing targeting/cooldown/freeze machinery; minibosses reuse these | ✅ |
-| 6 | **Minibosses + pipe destruction:** engagement/leash/reset, color powers vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | ✅ |
+| 5 | **Powers:** unified nova (bitfield, concentric strokes, swept hit), projectiles, freeze/slow, WIS nova PWR | Flagship | One pulse shared by player, minibosses, and finale; color bits replace seven fireables | ✅ |
+| 6 | **Minibosses + pipe destruction:** engagement/leash/reset, nova vs player, death sequence, segment explosions, **color wave**, unlock overlay | Flagship | The wave's double-bake clip rendering plus the choreographed sequence is the trickiest visual work in the project | ✅ |
 | 7 | **Run lifecycle + meta:** death/win overlays, revives, localStorage, scrap shop, title screen | Capable | The shop table and persistence rules are precise; mostly wiring the phase-4 framework | ✅ |
-| 8 | **Final boss + finale:** plaza portal, all-powers boss, map-wide pursuit, win state | Capable | Reuses phase-5 powers and phase-6 patterns; numbers are specified | ✅ |
+| 8 | **Final boss + finale:** plaza portal, one rainbow nova, map-wide pursuit, win state | Capable | Reuses phase-5 nova and phase-6 patterns; numbers are specified | ✅ |
 | 9 | **Opening cutscene + dialogue UI:** panel component, scripted choreography, skip | Flagship | Scripted movement + sequenced pipe/color drain under tight bytes; first candidate on the fallback ladder, so cost judgment matters | ✅ |
 | 10 | **Tuning + stretch + ship:** balance numbers (the §5 TBDs), surge spawns, difficulty modes, audio, final golfing | Flagship | Playtest judgment and byte-tradeoff calls per Rule 5 | |
 
@@ -728,8 +736,8 @@ Notes:
   unreserved). Phase 10 must golf and spend from the §1 fallback ladder.
 - Shop prices, Start HP / Start Speed amounts, revive HP/i-frames, and
   other combat numbers remain placeholders until the tuning phase.
-  Debug: 1–7 toggle palette + powers without killing minibosses; F
-  unlocks all colors and starts the finale; C grants scrap; K sets HP
-  to 0.
+  Debug: 1–7 toggle palette (nova bits follow unlocks) without killing
+  minibosses; F unlocks all colors and starts the finale; C grants scrap;
+  K sets HP to 0.
 - Audio (phase 10) stays deferred per §2; drop stretch items before shop rows per the
   §1 fallback ladder.

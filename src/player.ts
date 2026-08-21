@@ -37,8 +37,8 @@ export const player = {
   maxHp: 100,
   /** Remaining freeze (ms). Frozen entities take +25% damage. */
   frozen: 0,
-  /** Remaining shield absorb (HP). Lasts until depleted. */
-  shield: 0,
+  /** Remaining yellow-nova speed burst (ms). */
+  boost: 0,
   /** Extra lives remaining this run (from the shop Revive row). */
   lives: 0,
   /** Remaining i-frames (ms). Incoming damage is ignored while > 0. */
@@ -58,18 +58,6 @@ export function damagePlayer(amount: number): void {
   const hit = getPlayerHitbox();
   const cx = hit.x + hit.w / 2;
   const cy = hit.y + hit.h / 2;
-  if (player.shield > 0) {
-    const used = Math.min(player.shield, amount);
-    player.shield -= used;
-    amount -= used;
-    spawnExplosion(cx, cy, 0xa656ff, 4);
-    if (player.shield <= 0) {
-      player.shield = 0;
-    }
-    if (amount <= 0) {
-      return;
-    }
-  }
   spawnExplosion(cx, cy, 0x000000, 5);
   spawnExplosion(cx, cy, 0xffffff, 5);
   player.hp = Math.max(0, player.hp - amount);
@@ -115,7 +103,7 @@ export function resetPlayer(): void {
     100 + CON_HP_PER_RANK * totalStat(STAT_CON) + START_HP_PER_RANK * shopRanks[SHOP_START_HP];
   player.hp = player.maxHp;
   player.frozen = 0;
-  player.shield = 0;
+  player.boost = 0;
   player.lives = shopRanks[SHOP_REVIVE];
   player.iframes = 0;
   lastDiagX = 1;
@@ -126,6 +114,9 @@ export function resetPlayer(): void {
 export function updatePlayer(dt: number): void {
   if (player.iframes > 0) {
     player.iframes = Math.max(0, player.iframes - dt);
+  }
+  if (player.boost > 0) {
+    player.boost = Math.max(0, player.boost - dt);
   }
   if (player.frozen > 0) {
     player.frozen = Math.max(0, player.frozen - dt);
@@ -177,7 +168,7 @@ export function updatePlayer(dt: number): void {
     player.faceY = dy;
   }
 
-  const speed = PLAYER_SPEED * speedMul() * (dx !== 0 && dy !== 0 ? Math.SQRT1_2 : 1);
+  const speed = PLAYER_SPEED * speedMul(player.boost) * (dx !== 0 && dy !== 0 ? Math.SQRT1_2 : 1);
   moveWithCollision(dx * speed * dt, dy * speed * dt);
 }
 

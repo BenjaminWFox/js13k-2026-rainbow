@@ -3,75 +3,58 @@ import {
   applyKnockback,
   crowdControl,
   crowdControlAt,
+  type Enemy,
   enemies,
   enemyHitbox,
   FINAL_BOSS,
   hurtEnemyAt,
 } from './enemies';
-import { drawText } from './font';
 import { getTile, TILE_WALL } from './map';
-import { RAINBOW_COLORS } from './palette';
+import { RAINBOW_COLORS, unlockedColors } from './palette';
 import { damagePlayer, freezePlayer, getPlayerHitbox, player } from './player';
-import {
-  colorDamage,
-  kitDamage,
-  POWER_FIREBALL,
-  POWER_FLAME_NOVA,
-  POWER_FROST_NOVA,
-  POWER_FROSTBALL,
-  POWER_HEAL,
-  POWER_HORN,
-  POWER_SHIELD,
-  POWER_STOMP,
-  powerAmount,
-  powerCooldown,
-  powerRanks,
-} from './stats';
+import { hornPwr, novaPwr } from './stats';
 
-// Combat numbers are TBD; placeholders until the tuning phase.
 const HORN_COOLDOWN_MS = 650;
 const HORN_DAMAGE = 10;
 const HORN_FORWARD = 35;
 const HORN_WIDTH = 13 * 1.5;
 const HORN_FLASH_MS = 150;
 
-const STOMP_COOLDOWN_MS = 1800;
 const STOMP_DAMAGE = 5;
-const STOMP_RADIUS = 66;
+const NOVA_RADIUS = 66;
 const STOMP_KNOCKBACK = 0.36;
-const STOMP_FLASH_MS = 200;
 
-const FIREBALL_COOLDOWN_MS = 800;
 const FIREBALL_DAMAGE = 8;
-const FROSTBALL_COOLDOWN_MS = 3000;
 const BOLT_SPEED = 0.18;
 const BOLT_SIZE = 4;
 
-const FLAME_NOVA_COOLDOWN_MS = 2200;
 const FLAME_NOVA_DAMAGE = 6;
-const FROST_NOVA_COOLDOWN_MS = 5000;
-const NOVA_RADIUS = 56;
-const NOVA_FLASH_MS = 280;
+const NOVA_PERIOD = 2000;
+const NOVA_LIFE = 500;
+const YELLOW_PERIOD = 500;
+const SPEED_BURST_MS = 1000;
 const FREEZE_MS = 500;
 /** 2× the 7px enemy sprite cell — "small impact radius". */
 const FROSTBALL_RADIUS = 14;
 
-const HEAL_COOLDOWN_MS = 4000;
 const HEAL_AMOUNT = 8;
-const HEAL_FX_MS = 450;
 
-const SHIELD_COOLDOWN_MS = 6000;
-const SHIELD_ABSORB = 15;
-const SHIELD_RADIUS = 13;
+const BOLT_FIRE = 0;
+const BOLT_FROST = 1;
 
-export const BOLT_FIRE = 0;
-export const BOLT_FROST = 1;
+const N_WHITE = 1;
+const N_RED = 2;
+const N_ORANGE = 4;
+const N_YELLOW = 8;
+const N_GREEN = 16;
+const N_BLUE = 32;
+const N_INDIGO = 64;
+const N_VIOLET = 128;
+const N_FINALE = N_RED | N_ORANGE | N_GREEN | N_BLUE | N_INDIGO | N_VIOLET;
 
-const cdTimer = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-/** Fireball, flame nova, heal, frost nova, frostball, shield. */
-const finaleCd = [0, 0, 0, 0, 0, 0];
+let hornCd = 0;
+let novaCd = 0;
 let hornFlash = 0;
-let stompFlash = 0;
 
 const hornBox = { x: 0, y: 0, w: 0, h: 0 };
 let hornFaceX = 1;
@@ -89,24 +72,18 @@ interface Bolt {
   friendly: boolean;
 }
 
-interface RingFx {
-  x: number;
-  y: number;
-  radius: number;
+interface Nova {
+  owner: Enemy | null;
+  bits: number;
+  pwr: number;
   life: number;
-  maxLife: number;
-  color: string;
-}
-
-interface HealFx {
-  x: number;
-  y: number;
-  life: number;
+  lastR: number;
+  seen: Enemy[];
+  hitP: boolean;
 }
 
 const bolts: Bolt[] = [];
-const novas: RingFx[] = [];
-const heals: HealFx[] = [];
+const novas: Nova[] = [];
 
 let viewX = 0;
 let viewY = 0;
@@ -152,6 +129,15 @@ function hornHitbox(): { x: number; y: number; w: number; h: number } {
 function playerCenter(): { x: number; y: number } {
   const hit = getPlayerHitbox();
   return { x: hit.x + hit.w / 2, y: hit.y + hit.h / 2 };
+}
+
+function enemyCenter(enemy: Enemy): { x: number; y: number } {
+  const box = enemyHitbox(enemy);
+  return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+}
+
+function novaCenter(n: Nova): { x: number; y: number } {
+  return n.owner ? enemyCenter(n.owner) : playerCenter();
 }
 
 function overlaps(
@@ -200,19 +186,14 @@ function nearestEnemyCenter(fromX: number, fromY: number): { x: number; y: numbe
   return bestD === Infinity ? null : { x: bestX, y: bestY };
 }
 
-function tickFire(id: number, dt: number, baseCd: number, fire: () => boolean): void {
-  if (powerRanks[id] < 1) {
-    return;
+function playerBits(): number {
+  let bits = N_WHITE;
+  for (let i = 0; i < 7; i++) {
+    if (unlockedColors[i]) {
+      bits |= 2 << i;
+    }
   }
-  cdTimer[id] -= dt;
-  if (cdTimer[id] > 0) {
-    return;
-  }
-  if (fire()) {
-    cdTimer[id] += powerCooldown(baseCd, id);
-  } else {
-    cdTimer[id] = 0;
-  }
+  return bits;
 }
 
 export function updateCombat(
@@ -228,85 +209,41 @@ export function updateCombat(
   viewH = viewHeight;
 
   hornFlash = Math.max(0, hornFlash - dt);
-  stompFlash = Math.max(0, stompFlash - dt);
 
-  tickFire(POWER_HORN, dt, HORN_COOLDOWN_MS, () => {
+  hornCd -= dt;
+  if (hornCd <= 0) {
     fireHorn();
-    return true;
-  });
-  tickFire(POWER_STOMP, dt, STOMP_COOLDOWN_MS, () => {
-    fireStomp();
-    return true;
-  });
-  tickFire(POWER_FIREBALL, dt, FIREBALL_COOLDOWN_MS, tryFireball);
-  tickFire(POWER_FROSTBALL, dt, FROSTBALL_COOLDOWN_MS, tryFrostball);
-  tickFire(POWER_FLAME_NOVA, dt, FLAME_NOVA_COOLDOWN_MS, () => {
-    const c = playerCenter();
-    fireNova(
-      c.x,
-      c.y,
-      NOVA_RADIUS,
-      colorDamage(FLAME_NOVA_DAMAGE, POWER_FLAME_NOVA),
-      0,
-      '#ff8200',
-      true
-    );
-    return true;
-  });
-  tickFire(POWER_FROST_NOVA, dt, FROST_NOVA_COOLDOWN_MS, () => {
-    const c = playerCenter();
-    fireNova(c.x, c.y, NOVA_RADIUS, 0, powerAmount(FREEZE_MS, POWER_FROST_NOVA), '#0030e2', true);
-    return true;
-  });
-  tickFire(POWER_HEAL, dt, HEAL_COOLDOWN_MS, () => {
-    player.hp = Math.min(player.maxHp, player.hp + powerAmount(HEAL_AMOUNT, POWER_HEAL));
-    heals.push({ x: player.x + PLAYER_WIDTH / 2, y: player.y - 2, life: HEAL_FX_MS });
-    return true;
-  });
-  tickFire(POWER_SHIELD, dt, SHIELD_COOLDOWN_MS, () => {
-    if (player.shield > 0) {
-      return false;
+    hornCd += HORN_COOLDOWN_MS;
+  }
+
+  novaCd -= dt;
+  if (novaCd <= 0) {
+    fireNova(null, playerBits());
+    novaCd += NOVA_PERIOD;
+  }
+
+  for (const enemy of enemies) {
+    if (!enemy.boss || !enemy.chasing) {
+      continue;
     }
-    player.shield = powerAmount(SHIELD_ABSORB, POWER_SHIELD);
-    return true;
-  });
+    enemy.cd -= dt;
+    if (enemy.cd > 0) {
+      continue;
+    }
+    fireNova(enemy, enemy.color === FINAL_BOSS ? N_FINALE : 2 << enemy.color);
+    enemy.cd += enemy.color === 2 ? YELLOW_PERIOD : NOVA_PERIOD;
+  }
 
-  updateMinibossPowers(dt);
-  updateFinalePowers(dt);
-
+  updateNovas(dt);
   updateBolts(dt);
-  for (let i = novas.length - 1; i >= 0; i--) {
-    novas[i].life -= dt;
-    if (novas[i].life <= 0) {
-      novas.splice(i, 1);
-    }
-  }
-  for (let i = heals.length - 1; i >= 0; i--) {
-    heals[i].life -= dt;
-    if (heals[i].life <= 0) {
-      heals.splice(i, 1);
-    }
-  }
 }
 
 export function resetCombat(): void {
-  cdTimer.fill(0);
-  finaleCd.fill(0);
+  hornCd = 0;
+  novaCd = 0;
   hornFlash = 0;
-  stompFlash = 0;
   bolts.length = 0;
   novas.length = 0;
-  heals.length = 0;
-}
-
-/** Stagger the final boss's first volley so it doesn't dump every power on spawn. */
-export function primeFinalePowers(): void {
-  finaleCd[0] = 500;
-  finaleCd[1] = 1100;
-  finaleCd[2] = 2200;
-  finaleCd[3] = 1400;
-  finaleCd[4] = 800;
-  finaleCd[5] = 200;
 }
 
 function fireHorn(): void {
@@ -337,165 +274,43 @@ function fireHorn(): void {
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemyHitbox(enemies[i]);
     if (overlaps(hornBox.x, hornBox.y, hornBox.w, hornBox.h, enemy.x, enemy.y, enemy.w, enemy.h)) {
-      hurtEnemyAt(i, kitDamage(HORN_DAMAGE, POWER_HORN));
+      hurtEnemyAt(i, HORN_DAMAGE * hornPwr());
     }
   }
 }
 
-function fireStomp(): void {
-  const center = playerCenter();
-  stompFlash = STOMP_FLASH_MS;
-  for (let i = enemies.length - 1; i >= 0; i--) {
-    const box = enemyHitbox(enemies[i]);
-    const ex = box.x + box.w / 2;
-    const ey = box.y + box.h / 2;
-    if (Math.hypot(ex - center.x, ey - center.y) > STOMP_RADIUS) {
-      continue;
-    }
-    if (!hurtEnemyAt(i, kitDamage(STOMP_DAMAGE, POWER_STOMP))) {
-      applyKnockback(enemies[i], center.x, center.y, STOMP_KNOCKBACK);
+function fireNova(owner: Enemy | null, bits: number): void {
+  const pwr = owner ? 1 : novaPwr();
+  const c = owner ? enemyCenter(owner) : playerCenter();
+  if (bits & N_GREEN) {
+    if (owner) {
+      owner.hp = Math.min(owner.maxHp, owner.hp + HEAL_AMOUNT);
+    } else {
+      player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT * pwr);
     }
   }
-}
-
-function tryFireball(): boolean {
-  const c = playerCenter();
-  const t = nearestEnemyCenter(c.x, c.y);
-  if (!t) {
-    return false;
-  }
-  return spawnBolt(
-    c.x,
-    c.y,
-    t.x,
-    t.y,
-    BOLT_FIRE,
-    colorDamage(FIREBALL_DAMAGE, POWER_FIREBALL),
-    true
-  );
-}
-
-function tryFrostball(): boolean {
-  const c = playerCenter();
-  const t = nearestEnemyCenter(c.x, c.y);
-  if (!t) {
-    return false;
-  }
-  return spawnBolt(
-    c.x,
-    c.y,
-    t.x,
-    t.y,
-    BOLT_FROST,
-    0,
-    true,
-    powerAmount(FREEZE_MS, POWER_FROSTBALL)
-  );
-}
-
-function updateMinibossPowers(dt: number): void {
-  const target = playerCenter();
-  for (const enemy of enemies) {
-    if (enemy.color < 0 || enemy.color === 2 || !enemy.chasing) {
-      continue;
+  if (bits & N_YELLOW) {
+    if (owner) {
+      owner.boost = SPEED_BURST_MS;
+    } else {
+      player.boost = SPEED_BURST_MS;
     }
-    enemy.cd -= dt;
-    if (enemy.cd > 0) {
-      continue;
-    }
-    const box = enemyHitbox(enemy);
-    const x = box.x + box.w / 2;
-    const y = box.y + box.h / 2;
-    const color = enemy.color;
-    if (color === 0) {
-      spawnBolt(x, y, target.x, target.y, BOLT_FIRE, FIREBALL_DAMAGE, false);
-      enemy.cd = FIREBALL_COOLDOWN_MS;
-    } else if (color === 1) {
-      fireNova(x, y, NOVA_RADIUS, FLAME_NOVA_DAMAGE, 0, '#ff8200', false);
-      enemy.cd = FLAME_NOVA_COOLDOWN_MS;
-    } else if (color === 3) {
-      enemy.hp = Math.min(enemy.maxHp, enemy.hp + HEAL_AMOUNT);
-      enemy.cd = HEAL_COOLDOWN_MS;
-    } else if (color === 4) {
-      fireNova(x, y, NOVA_RADIUS, 0, FREEZE_MS, '#0030e2', false);
-      enemy.cd = FROST_NOVA_COOLDOWN_MS;
-    } else if (color === 5) {
-      spawnBolt(x, y, target.x, target.y, BOLT_FROST, 0, false, FREEZE_MS);
-      enemy.cd = FROSTBALL_COOLDOWN_MS;
-    } else if (color === 6) {
-      if (enemy.shield > 0) {
-        enemy.cd = 0;
-        continue;
+  }
+  if (bits & (N_RED | N_INDIGO)) {
+    const t = owner ? playerCenter() : nearestEnemyCenter(c.x, c.y);
+    if (t) {
+      if (bits & N_RED) {
+        spawnBolt(c.x, c.y, t.x, t.y, BOLT_FIRE, FIREBALL_DAMAGE * pwr, !owner);
       }
-      enemy.shield = SHIELD_ABSORB;
-      enemy.cd = SHIELD_COOLDOWN_MS;
+      if (bits & N_INDIGO) {
+        spawnBolt(c.x, c.y, t.x, t.y, BOLT_FROST, 0, !owner, FREEZE_MS * pwr);
+      }
     }
   }
+  novas.push({ owner, bits, pwr, life: NOVA_LIFE, lastR: -1, seen: [], hitP: false });
 }
 
-function tickFinale(i: number, dt: number, baseCd: number, fire: () => boolean): void {
-  finaleCd[i] -= dt;
-  if (finaleCd[i] > 0) {
-    return;
-  }
-  if (fire()) {
-    finaleCd[i] += baseCd;
-  } else {
-    finaleCd[i] = 0;
-  }
-}
-
-function updateFinalePowers(dt: number): void {
-  let found = null;
-  for (const enemy of enemies) {
-    if (enemy.color === FINAL_BOSS) {
-      found = enemy;
-      break;
-    }
-  }
-  if (!found) {
-    return;
-  }
-  const boss = found;
-  const target = playerCenter();
-  const box = enemyHitbox(boss);
-  const x = box.x + box.w / 2;
-  const y = box.y + box.h / 2;
-  tickFinale(0, dt, FIREBALL_COOLDOWN_MS, () =>
-    spawnBolt(x, y, target.x, target.y, BOLT_FIRE, FIREBALL_DAMAGE, false)
-  );
-  tickFinale(1, dt, FLAME_NOVA_COOLDOWN_MS, () => {
-    fireNova(x, y, NOVA_RADIUS, FLAME_NOVA_DAMAGE, 0, '#ff8200', false);
-    return true;
-  });
-  tickFinale(2, dt, HEAL_COOLDOWN_MS, () => {
-    if (boss.hp >= boss.maxHp) {
-      return false;
-    }
-    boss.hp = Math.min(boss.maxHp, boss.hp + HEAL_AMOUNT);
-    return true;
-  });
-  tickFinale(3, dt, FROST_NOVA_COOLDOWN_MS, () => {
-    fireNova(x, y, NOVA_RADIUS, 0, FREEZE_MS, '#0030e2', false);
-    return true;
-  });
-  tickFinale(4, dt, FROSTBALL_COOLDOWN_MS, () =>
-    spawnBolt(x, y, target.x, target.y, BOLT_FROST, 0, false, FREEZE_MS)
-  );
-  tickFinale(5, dt, SHIELD_COOLDOWN_MS, () => {
-    if (boss.shield > 0) {
-      return false;
-    }
-    boss.shield = SHIELD_ABSORB;
-    return true;
-  });
-}
-
-/**
- * Straight-line bolt toward a point at fire-time (no tracking).
- * `friendly` hits enemies; otherwise it hits the player. Minibosses reuse this.
- */
-export function spawnBolt(
+function spawnBolt(
   x: number,
   y: number,
   tx: number,
@@ -504,12 +319,12 @@ export function spawnBolt(
   damage: number,
   friendly: boolean,
   freezeMs = 0
-): boolean {
+): void {
   const dx = tx - x;
   const dy = ty - y;
   const dist = Math.hypot(dx, dy);
   if (dist < 0.01) {
-    return false;
+    return;
   }
   bolts.push({
     x,
@@ -521,44 +336,71 @@ export function spawnBolt(
     freezeMs,
     friendly,
   });
-  return true;
 }
 
-/** Area burst. `friendly` damages enemies; otherwise it hits the player. */
-export function fireNova(
-  x: number,
-  y: number,
-  radius: number,
-  damage: number,
-  freezeMs: number,
-  color: string,
-  friendly: boolean
-): void {
-  novas.push({ x, y, radius, life: NOVA_FLASH_MS, maxLife: NOVA_FLASH_MS, color });
-  if (friendly) {
-    for (let i = enemies.length - 1; i >= 0; i--) {
-      const enemy = enemies[i];
-      const box = enemyHitbox(enemy);
-      if (Math.hypot(box.x + box.w / 2 - x, box.y + box.h / 2 - y) > radius) {
-        continue;
-      }
-      let alive = true;
-      if (damage > 0) {
-        alive = !hurtEnemyAt(i, damage);
-      }
-      if (alive && freezeMs > 0) {
-        crowdControl(enemy, freezeMs);
+function updateNovas(dt: number): void {
+  for (let i = novas.length - 1; i >= 0; i--) {
+    const n = novas[i];
+    n.life -= dt;
+    const r = (1 - n.life / NOVA_LIFE) * NOVA_RADIUS;
+    const c = novaCenter(n);
+    const freeze = n.bits & N_BLUE ? FREEZE_MS * n.pwr : 0;
+    const dmg =
+      ((n.bits & N_WHITE ? STOMP_DAMAGE : 0) + (n.bits & N_ORANGE ? FLAME_NOVA_DAMAGE : 0)) * n.pwr;
+
+    if (n.bits & N_VIOLET) {
+      for (let b = bolts.length - 1; b >= 0; b--) {
+        const p = bolts[b];
+        if (n.owner ? !p.friendly : p.friendly) {
+          continue;
+        }
+        const dist = Math.hypot(p.x - c.x, p.y - c.y);
+        if (n.lastR < dist && dist <= r) {
+          bolts.splice(b, 1);
+        }
       }
     }
-    return;
-  }
-  const hit = getPlayerHitbox();
-  if (Math.hypot(hit.x + hit.w / 2 - x, hit.y + hit.h / 2 - y) <= radius) {
-    if (damage > 0) {
-      damagePlayer(damage);
+
+    if (!n.owner) {
+      for (let e = enemies.length - 1; e >= 0; e--) {
+        const enemy = enemies[e];
+        if (n.seen.indexOf(enemy) >= 0) {
+          continue;
+        }
+        const box = enemyHitbox(enemy);
+        const dist = Math.hypot(box.x + box.w / 2 - c.x, box.y + box.h / 2 - c.y);
+        if (n.lastR >= dist || dist > r) {
+          continue;
+        }
+        n.seen.push(enemy);
+        if (freeze) {
+          crowdControl(enemy, freeze);
+        }
+        let alive = true;
+        if (dmg) {
+          alive = !hurtEnemyAt(e, dmg);
+        }
+        if (alive && n.bits & N_WHITE) {
+          applyKnockback(enemy, c.x, c.y, STOMP_KNOCKBACK);
+        }
+      }
+    } else if (!n.hitP) {
+      const hit = getPlayerHitbox();
+      const dist = Math.hypot(hit.x + hit.w / 2 - c.x, hit.y + hit.h / 2 - c.y);
+      if (n.lastR < dist && dist <= r) {
+        n.hitP = true;
+        if (freeze) {
+          freezePlayer(freeze);
+        }
+        if (dmg) {
+          damagePlayer(dmg);
+        }
+      }
     }
-    if (freezeMs > 0) {
-      freezePlayer(freezeMs);
+
+    n.lastR = r;
+    if (n.life <= 0) {
+      novas.splice(i, 1);
     }
   }
 }
@@ -659,41 +501,31 @@ export function drawCombat(ctx: CanvasRenderingContext2D, cameraX: number, camer
     );
   }
 
-  if (stompFlash > 0) {
-    const center = playerCenter();
-    const t = 1 - stompFlash / STOMP_FLASH_MS;
-    const cx = Math.floor(center.x - cameraX) + 0.5;
-    const cy = Math.floor(center.y - cameraY) + 0.5;
-    const r = 4 + t * (STOMP_RADIUS - 4);
-    ctx.globalAlpha = 1 - t;
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(cx, cy, Math.max(1, r - 1), 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
   ctx.lineWidth = 1;
-  for (const nova of novas) {
-    const t = 1 - nova.life / nova.maxLife;
-    const cx = Math.floor(nova.x - cameraX) + 0.5;
-    const cy = Math.floor(nova.y - cameraY) + 0.5;
-    const r = 4 + t * (nova.radius - 4);
-    ctx.globalAlpha = 1 - t;
-    ctx.strokeStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = nova.color;
-    ctx.beginPath();
-    ctx.arc(cx, cy, Math.max(1, r - 1), 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+  for (const n of novas) {
+    const c = novaCenter(n);
+    const r = (1 - n.life / NOVA_LIFE) * NOVA_RADIUS;
+    const cols: string[] = [];
+    if (n.bits & N_WHITE) {
+      cols.push('#fff');
+    }
+    for (let i = 0; i < 7; i++) {
+      if (n.bits & (2 << i)) {
+        cols.push('#' + RAINBOW_COLORS[i].toString(16).padStart(6, '0'));
+      }
+    }
+    const cx = Math.floor(c.x - cameraX) + 0.5;
+    const cy = Math.floor(c.y - cameraY) + 0.5;
+    for (let i = 0; i < cols.length; i++) {
+      const band = r - (cols.length - 1 - i);
+      if (band < 1) {
+        continue;
+      }
+      ctx.strokeStyle = cols[i];
+      ctx.beginPath();
+      ctx.arc(cx, cy, band, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   const hw = (BOLT_SIZE / 2) | 0;
@@ -707,21 +539,6 @@ export function drawCombat(ctx: CanvasRenderingContext2D, cameraX: number, camer
     ctx.fillRect(sx + 1, sy + 1, BOLT_SIZE - 1, BOLT_SIZE - 1);
   }
 
-  if (player.shield > 0) {
-    const sx = Math.floor(player.x - cameraX);
-    const sy = Math.floor(player.y - cameraY);
-    const cx = sx + PLAYER_WIDTH / 2;
-    const cy = sy + PLAYER_HEIGHT / 2;
-    ctx.strokeStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(cx, cy, SHIELD_RADIUS, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = '#a656ff';
-    ctx.beginPath();
-    ctx.arc(cx, cy, SHIELD_RADIUS - 1, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
   if (player.frozen > 0) {
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = '#8df';
@@ -730,19 +547,6 @@ export function drawCombat(ctx: CanvasRenderingContext2D, cameraX: number, camer
       Math.floor(player.y - cameraY),
       PLAYER_WIDTH,
       PLAYER_HEIGHT
-    );
-    ctx.globalAlpha = 1;
-  }
-
-  for (const fx of heals) {
-    const t = 1 - fx.life / HEAL_FX_MS;
-    ctx.globalAlpha = 1 - t;
-    drawText(
-      ctx,
-      '+',
-      Math.floor(fx.x - cameraX - 1),
-      Math.floor(fx.y - cameraY - t * 10),
-      '#08ba00'
     );
     ctx.globalAlpha = 1;
   }
@@ -766,10 +570,10 @@ function strokeChevron(
   ctx.stroke();
 }
 
-/** Debug: live horn AABB (follows facing) and stomp radius. */
+/** Debug: live horn AABB (follows facing) and nova radius. */
 export function combatDebug(): {
   horn: { x: number; y: number; w: number; h: number };
   radius: number;
 } {
-  return { horn: hornHitbox(), radius: STOMP_RADIUS };
+  return { horn: hornHitbox(), radius: NOVA_RADIUS };
 }

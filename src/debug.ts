@@ -20,7 +20,6 @@ import {
 import { pipePieces } from './pipes';
 import { getPlayerHitbox, player } from './player';
 import { createSprite, rebakeAllSprites } from './sprites';
-import { COLOR_POWERS, grantPower, powerRanks } from './stats';
 
 let showHitboxes = false;
 
@@ -99,7 +98,7 @@ export function initDebugProps(): void {
 }
 
 /**
- * Keys 1-7 toggle rainbow unlocks and grant/revoke that color's power;
+ * Keys 1-7 toggle rainbow unlocks;
  * 8 toggles hitbox outlines; 9 burst-spawns 50 enemies; 0 restores full HP;
  * X grants 5 XP; C grants 50 scrap; K sets HP to 0; F starts the finale.
  * Dev-only.
@@ -108,11 +107,6 @@ export function handleDebugKeys(): void {
   for (let i = 0; i < 7; i++) {
     if (wasPressed('Digit' + (i + 1))) {
       unlockedColors[i] = !unlockedColors[i];
-      if (unlockedColors[i]) {
-        grantPower(COLOR_POWERS[i]);
-      } else {
-        powerRanks[COLOR_POWERS[i]] = 0;
-      }
       rebakeAllSprites();
       bakeTiles();
     }
@@ -138,7 +132,6 @@ export function handleDebugKeys(): void {
   if (wasPressed('KeyF') && scene === SCENE_RUN) {
     for (let i = 0; i < 7; i++) {
       unlockedColors[i] = true;
-      grantPower(COLOR_POWERS[i]);
     }
     rebakeAllSprites();
     bakeTiles();

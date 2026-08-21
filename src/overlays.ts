@@ -1,4 +1,4 @@
-import { primeFinalePowers, resetCombat } from './combat';
+import { resetCombat } from './combat';
 import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from './constants';
 import { startCutscene } from './cutscene';
 import {
@@ -22,12 +22,9 @@ import { rebakeAllSprites } from './sprites';
 import {
   applyPick,
   COLOR_NAMES,
-  COLOR_POWERS,
   CON_HP_PER_RANK,
   type DraftCard,
   dealLevelUpCards,
-  grantPower,
-  KIND_STAT,
   POWER_TITLE,
   POWER_UNLOCK_BODY,
   resetRunStats,
@@ -181,7 +178,7 @@ function openLevelUp(): void {
   openCards('LEVEL UP', hand, (index) => {
     const card = hand[index];
     applyPick(card);
-    if (card.kind === KIND_STAT && card.id === STAT_CON) {
+    if (card.id === STAT_CON) {
       player.maxHp += CON_HP_PER_RANK;
       player.hp += CON_HP_PER_RANK;
     }
@@ -190,11 +187,10 @@ function openLevelUp(): void {
 }
 
 function openUnlock(color: number): void {
-  const power = COLOR_POWERS[color];
   const hex = '#' + RAINBOW_COLORS[color].toString(16).padStart(6, '0');
   openCards(
     COLOR_NAMES[color],
-    [{ title: POWER_TITLE[power], body: POWER_UNLOCK_BODY[color] }],
+    [{ title: POWER_TITLE[color], body: POWER_UNLOCK_BODY[color] }],
     () => closeUi(),
     hex
   );
@@ -249,7 +245,6 @@ export function beginFinale(): void {
   finaleStarted = true;
   const home = spawnPlazaPortal();
   spawnFinalBoss(home.x, home.y);
-  primeFinalePowers();
 }
 
 function wantsPause(): boolean {
@@ -294,7 +289,6 @@ export function startPendingDeathSequence(
   if (!death) {
     return;
   }
-  grantPower(COLOR_POWERS[death.color]);
   unlockNextTier();
   killOnScreenRegulars(camX, camY, viewW, viewH);
   seq = {

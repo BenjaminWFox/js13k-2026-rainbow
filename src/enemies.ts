@@ -90,7 +90,8 @@ export interface Enemy {
   homeY: number;
   /** Attack cooldown remaining (ms). */
   cd: number;
-  shield: number;
+  /** Remaining yellow-nova speed burst (ms). */
+  boost: number;
   chasing: boolean;
   /** Bosses only: walked this frame — drives the leg-cut walk cycle. */
   moving: boolean;
@@ -219,7 +220,7 @@ function spawnMinibosses(): void {
       homeX: home.x,
       homeY: home.y,
       cd: 0,
-      shield: 0,
+      boost: 0,
       chasing: false,
       moving: false,
     });
@@ -244,7 +245,7 @@ export function spawnFinalBoss(x: number, y: number): void {
     homeX: x,
     homeY: y,
     cd: 0,
-    shield: 0,
+    boost: 0,
     chasing: true,
     moving: false,
   });
@@ -276,6 +277,9 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
     }
     if (enemy.slowed > 0) {
       enemy.slowed = Math.max(0, enemy.slowed - dt);
+    }
+    if (enemy.boost > 0) {
+      enemy.boost = Math.max(0, enemy.boost - dt);
     }
     enemy.contactTimer = Math.max(0, enemy.contactTimer - dt);
 
@@ -311,7 +315,7 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
     if (isMini) {
       if (dist > RESET_RANGE) {
         enemy.hp = enemy.maxHp;
-        enemy.shield = 0;
+        enemy.boost = 0;
         enemy.slowed = 0;
         enemy.chasing = false;
       } else if (dist > CHASE_OUT) {
@@ -349,7 +353,7 @@ export function updateEnemies(dt: number, viewWidth: number, viewHeight: number)
     if (enemy.color === FINAL_BOSS) {
       speed = PLAYER_SPEED;
     } else if (isMini) {
-      speed = enemy.color === 2 ? MINI_SPEED_YELLOW : MINI_SPEED;
+      speed = enemy.boost > 0 ? MINI_SPEED_YELLOW : MINI_SPEED;
       if (!enemy.chasing) {
         moveX = enemy.homeX - enemy.x;
         moveY = enemy.homeY - enemy.y;
@@ -426,7 +430,7 @@ function trySpawn(playerCenterX: number, playerCenterY: number, radius: number):
       homeX: 0,
       homeY: 0,
       cd: 0,
-      shield: 0,
+      boost: 0,
       chasing: false,
       moving: false,
     });
@@ -612,8 +616,7 @@ export function drawEnemies(
       enemy.color === FINAL_BOSS
         ? (finalBossSprites as HTMLCanvasElement[])
         : minibossSprites[enemy.color];
-    const canvas =
-      frames[enemy.moving ? 1 + (((enemy.bobTime / WALK_FRAME_MS) | 0) % 2) : 0];
+    const canvas = frames[enemy.moving ? 1 + (((enemy.bobTime / WALK_FRAME_MS) | 0) % 2) : 0];
     const screenX = Math.floor(enemy.x - cameraX);
     const screenY = Math.floor(enemy.y - cameraY);
     if (
@@ -634,18 +637,6 @@ export function drawEnemies(
       Math.round((canvas.width - 2) * (enemy.hp / enemy.maxHp)),
       1
     );
-    if (enemy.shield > 0) {
-      const cx = screenX + canvas.width / 2;
-      const cy = screenY + canvas.height / 2;
-      ctx.strokeStyle = '#000';
-      ctx.beginPath();
-      ctx.arc(cx, cy, 13, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = '#a656ff';
-      ctx.beginPath();
-      ctx.arc(cx, cy, 12, 0, Math.PI * 2);
-      ctx.stroke();
-    }
     if (enemy.slowed > 0) {
       ctx.globalAlpha = 0.25;
       ctx.fillStyle = '#8df';
@@ -689,15 +680,6 @@ export function hurtEnemyAt(index: number, amount: number): boolean {
   const cx = box.x + box.w / 2;
   const cy = box.y + box.h / 2;
   spawnDamageNumber(cx, enemy.y - 6, amount);
-  if (enemy.shield > 0) {
-    const used = Math.min(enemy.shield, amount);
-    enemy.shield -= used;
-    amount -= used;
-    spawnExplosion(cx, cy, 0xa656ff, 4);
-    if (amount <= 0) {
-      return false;
-    }
-  }
   enemy.hp -= amount;
   if (enemy.hp > 0) {
     return false;

@@ -1,6 +1,6 @@
 // The canvas fills the whole viewport at an integer pixel scale chosen so the
 // visible world height is as close to this as possible.
-export const TARGET_VIEW_HEIGHT = 250;
+export const TARGET_VIEW_HEIGHT = 300;
 
 export const TILE_SIZE = 11;
 
@@ -17,7 +17,7 @@ export const MAP_WIDTH = 100;
 export const MAP_HEIGHT = 100;
 
 // Pixels per millisecond
-export const PLAYER_SPEED = 0.25;
+export const PLAYER_SPEED = 0.05;
 
 // Walk-cycle cadence (§3 Animation): ms per leg-cut frame while moving
 export const WALK_FRAME_MS = 150;
